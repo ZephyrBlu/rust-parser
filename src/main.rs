@@ -89,15 +89,16 @@ enum MPQTableEntry {
     Block(BlockTableEntry),
 }
 
-struct MPQArchive {
-    file: File,
+struct MPQArchive<'a> {
+    filename: &'a str,
     header: MPQFileHeader,
     hash_table: Vec<MPQTableEntry>,
     block_table: Vec<MPQTableEntry>,
     files: Option<String>,
+    encryption_table: HashMap<u64, u64>,
 }
 
-impl MPQArchive {
+impl MPQArchive<'_> {
     fn new(filename: &str) -> MPQArchive {
         let mut file = File::open(filename).expect("Failed to read replay file");
         let header = MPQArchive::read_header(&mut file);
@@ -106,7 +107,7 @@ impl MPQArchive {
         let hash_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "hash");
         let block_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "block");
 
-        let contents = MPQArchive::read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
+        let contents = MPQArchive::_read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
         let files = match contents {
             Some(data) => {
                 let file_data = String::from_utf8(data).unwrap();
@@ -116,11 +117,12 @@ impl MPQArchive {
         };
 
         MPQArchive {
-            file,
+            filename,
             header,
             hash_table,
             block_table,
             files,
+            encryption_table
         }
     }
 
@@ -346,8 +348,8 @@ impl MPQArchive {
         result
     }
 
-    fn read_file(file: &mut File, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
-        let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, filename);
+    fn _read_file(file: &mut File, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
+        let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
         let hash_entry = match hash_entry_wrapper {
             Some(entry) => entry,
             None => return None,
@@ -394,12 +396,18 @@ impl MPQArchive {
                 block_entry.flags & MPQ_FILE_COMPRESS != 0 &&
                 (force_decompress || block_entry.size > block_entry.archived_size)
             ) {
+                println!("decompressing archive file {:?}", archive_filename);
                 file_data = MPQArchive::decompress(file_data);
             }
 
             return Some(file_data);
         }
         None
+    }
+
+    fn read_file(&self, archive_filename: &str) -> Option<Vec<u8>> {
+        let mut file = File::open(self.filename).expect("Failed to read replay file");
+        MPQArchive::_read_file(&mut file, &self.header, &self.encryption_table, &self.hash_table, &self.block_table, archive_filename, false)
     }
 
     fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, filename: &str) -> Option<HashTableEntry> {
@@ -418,6 +426,7 @@ impl MPQArchive {
     }
 
     fn decompress(data: Vec<u8>) -> Vec<u8> {
+        const COMPRESSION_FACTOR: usize = 10;
         let compression_type = data[0];
 
         if compression_type == 0 {
@@ -426,7 +435,7 @@ impl MPQArchive {
             panic!("zlib compression unsupported");
         } else if  compression_type == 16 {
             let mut decompressor = Decompress::new(false);
-            let mut decompressed_data = Vec::with_capacity(data.len());
+            let mut decompressed_data = Vec::with_capacity(data.len() * COMPRESSION_FACTOR);
             decompressor.decompress_vec(&mut &data[1..], &mut decompressed_data).unwrap();
             return decompressed_data;
         } else {
@@ -443,7 +452,16 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let replay = MPQArchive::new("neural parasite upgrade.SC2Replay");
+    let archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
     println!("{:.2?}", now.elapsed());
-    println!("file header {:?}", replay.header.header_size);
+    let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
+
+    let contents = archive.read_file("replay.tracker.events");
+    let details = archive.read_file("replay.details");
+    let game_info = archive.read_file("replay.game.events");
+    let init_data = archive.read_file("replay.initData");
+    let metadata = archive.read_file("replay.gamemetadata.json");
+    let string = String::from_utf8(metadata.unwrap());
+
+    println!("game details {:?}", string);
 }
