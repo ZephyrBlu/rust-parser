@@ -94,7 +94,7 @@ struct MPQArchive {
     header: MPQFileHeader,
     hash_table: Vec<MPQTableEntry>,
     block_table: Vec<MPQTableEntry>,
-    files: Option<Vec<u8>>,
+    files: Option<String>,
 }
 
 impl MPQArchive {
@@ -106,7 +106,14 @@ impl MPQArchive {
         let hash_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "hash");
         let block_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "block");
 
-        let files = MPQArchive::read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
+        let contents = MPQArchive::read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
+        let files = match contents {
+            Some(data) => {
+                let file_data = String::from_utf8(data).unwrap();
+                Some(file_data)
+            },
+            None => None,
+        };
 
         MPQArchive {
             file,
@@ -399,9 +406,7 @@ impl MPQArchive {
         let hash_a = MPQArchive::hash(encryption_table, filename, MPQHash::HashA);
         let hash_b = MPQArchive::hash(encryption_table, filename, MPQHash::HashB);
 
-        let mut count = 0;
         for entry in hash_table {
-            count += 1;
             if let MPQTableEntry::Hash(table_entry) = entry {
                 if (table_entry.hash_a as u64) == hash_a && (table_entry.hash_b as u64) == hash_b {
                     return Some(*table_entry);
