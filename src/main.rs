@@ -3,6 +3,7 @@ use std::io::SeekFrom;
 use std::io::prelude::*;
 use std::str;
 use std::collections::HashMap;
+use bzip2::Decompress;
 
 const MPQ_FILE_IMPLODE: u32        = 0x00000100;
 const MPQ_FILE_COMPRESS: u32       = 0x00000200;
@@ -61,6 +62,7 @@ struct MPQUserDataHeader {
 
 // MPQUserDataHeader.struct_format = '< 4s 3I'
 
+#[derive(Debug, Copy, Clone)]
 struct HashTableEntry {
     hash_a: u32,
     hash_b: u32,
@@ -71,6 +73,7 @@ struct HashTableEntry {
 
 // MPQHashTableEntry.struct_format = '2I 2H I'
 
+#[derive(Debug)]
 struct BlockTableEntry {
     offset: u32,
     archived_size: u32,
@@ -80,6 +83,7 @@ struct BlockTableEntry {
 
 // MPQBlockTableEntry.struct_format = '4I'
 
+#[derive(Debug)]
 enum MPQTableEntry {
     Hash(HashTableEntry),
     Block(BlockTableEntry),
@@ -90,7 +94,7 @@ struct MPQArchive {
     header: MPQFileHeader,
     hash_table: Vec<MPQTableEntry>,
     block_table: Vec<MPQTableEntry>,
-    files: Vec<u8>,
+    files: Option<Vec<u8>>,
 }
 
 impl MPQArchive {
@@ -102,25 +106,25 @@ impl MPQArchive {
         let hash_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "hash");
         let block_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "block");
 
-        let files = MPQArchive::read_file("(listfile)", false);
+        let files = MPQArchive::read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
 
         MPQArchive {
             file,
             header,
-            hash_table: vec![],
-            block_table: vec![],
-            files: vec![],
+            hash_table,
+            block_table,
+            files,
         }
     }
 
     fn read_header(file: &mut File) -> MPQFileHeader {
         let mut magic = [0; 4];
         file.read_exact(&mut magic).unwrap();
+        file.seek(SeekFrom::Start(0));
 
         match magic {
             MPQ_MAGIC_A => MPQArchive::read_mpq_header(magic, file, None),
             MPQ_MAGIC_B => {
-                println!("");
                 let user_data_header = MPQArchive::read_mpq_user_data_header(magic, file);
                 MPQArchive::read_mpq_header(magic, file, Some(user_data_header))
             },
@@ -202,7 +206,6 @@ impl MPQArchive {
         let user_data_header_size_value = u32::from_le_bytes(user_data_header_size);
         let mut content = vec![0; user_data_header_size_value as usize];
         file.read_exact(&mut content).unwrap();
-        println!("file content{:?}", content);
 
         MPQUserDataHeader {
             magic,
@@ -239,6 +242,9 @@ impl MPQArchive {
         for i in 0..table_entries {
             let position = (i * 16) as usize;
             let table_entry: [u8; 16] = (&decrypted_data[position..position + 16]).try_into().unwrap();
+            println!("table entry {:?}", table_entry);
+            println!("values arr  {:?}", [&table_entry[0..4], &table_entry[4..8], &table_entry[8..10], &table_entry[10..12], &table_entry[12..16]]);
+
             let entry_value = match table_entry_type {
                 "hash" => {
                     let hash_a = u32::from_le_bytes(table_entry[0..4].try_into().unwrap());
@@ -246,6 +252,14 @@ impl MPQArchive {
                     let locale = u16::from_le_bytes(table_entry[8..10].try_into().unwrap());
                     let platform = u16::from_le_bytes(table_entry[10..12].try_into().unwrap());
                     let block_table_index = u32::from_le_bytes(table_entry[12..16].try_into().unwrap());
+
+                    println!("result {:?}", HashTableEntry {
+                        hash_a,
+                        hash_b,
+                        locale,
+                        platform,
+                        block_table_index,
+                    });
 
                     MPQTableEntry::Hash(HashTableEntry {
                         hash_a,
@@ -270,6 +284,7 @@ impl MPQArchive {
                 },
                 _other => panic!("Neither block or header"),
             };
+            // println!("adding value {:?}", entry_value);
             table_values.push(entry_value);
         }
 
@@ -313,10 +328,8 @@ impl MPQArchive {
 
     fn decrypt(table: &HashMap<u64, u64>, data: &Vec<u8>, key: u64) -> Vec<u8> {
         let mut seed1: u64 = key;
-        let mut seed2: u64 = 0x00100001;
+        let mut seed2: u64 = 0xEEEEEEEE;
         let mut result = vec![];
-
-        println!("data length {:?} {:?}", data.len(), data.len() / 4);
 
         for i in 0..(data.len() / 4) {
             seed2 += table[&(0x400 + (seed1 & 0xFF))] as u64;
@@ -325,25 +338,105 @@ impl MPQArchive {
             let position = i * 4;
             let value_bytes: [u8; 4] = (&data[position..position + 4]).try_into().unwrap();
             let mut value = u32::from_le_bytes(value_bytes) as u64;
-            println!("value before {:?}", value);
             value = (value ^ (seed1 + seed2)) & 0xFFFFFFFF;
 
             seed1 = ((!seed1 << 0x15) + 0x11111111) | (seed1 >> 0x0B);
             seed1 &= 0xFFFFFFFF;
             seed2 = value + seed2 + (seed2 << 5) + 3 & 0xFFFFFFFF;
 
-            result.extend(value.to_le_bytes());
+            let packed_value: u32 = value.try_into().unwrap();
+            result.extend(packed_value.to_le_bytes());
         }
 
         result
     }
 
-    fn read_file(filename: &str, force_decompress: bool) -> Vec<u8> {
-        vec![]
+    fn read_file(file: &mut File, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
+        let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, filename);
+        let hash_entry = match hash_entry_wrapper {
+            Some(entry) => entry,
+            None => return None,
+        };
+        let block_entry = match &block_table[hash_entry.block_table_index as usize] {
+            MPQTableEntry::Block(entry) => entry,
+            _other => panic!("Not block entry"),
+        };
+
+        println!("block stuff {:?}", block_entry.archived_size);
+
+        if block_entry.flags & MPQ_FILE_EXISTS != 0 {
+            if block_entry.archived_size == 0 {
+                return None;
+            }
+
+            let offset = block_entry.offset + header.offset;
+            file.seek(SeekFrom::Start(offset as u64));
+
+            let mut file_data = vec![0; block_entry.archived_size as usize];
+            file.read_exact(&mut file_data).unwrap();
+
+            if block_entry.flags & MPQ_FILE_ENCRYPTED != 0 {
+                panic!("Encrpytion not supported");
+            }
+
+            // file has many sectors that need to be separately decompressed
+            if block_entry.flags & MPQ_FILE_SINGLE_UNIT == 0 {
+                // let sector_size = 512 << header.sector_size_shift;
+                // let mut sectors = block_entry.size / sector_size + 1;
+
+                // let mut crc = false;
+                // if block_entry.flags & MPQ_FILE_SECTOR_CRC != 0 {
+                //     crc = true;
+                //     sectors += 1;
+                // }
+
+                // let positions = file_data[..4 * (sectors + 1)];
+                // let mut result = vec![];
+                // let mut sector_bytes_left = block_entry.size;
+
+                // for i in 0..(positions.len() - (crc ? 2 : 1)) {
+                //     let sector = file_data[positions[i]..positions[i + 1]]
+                // }
+            } else if (
+                block_entry.flags & MPQ_FILE_COMPRESS != 0 &&
+                (force_decompress || block_entry.size > block_entry.archived_size)
+            ) {
+                file_data = MPQArchive::decompress(file_data);
+            }
+
+            return Some(file_data);
+        }
+        None
+    }
+
+    fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, filename: &str) -> Option<HashTableEntry> {
+        let hash_a = MPQArchive::hash(encryption_table, filename, MPQHash::HashA);
+        let hash_b = MPQArchive::hash(encryption_table, filename, MPQHash::HashB);
+        let mut result = None;
+
+        let mut count = 0;
+        for entry in hash_table {
+            count += 1;
+            if let MPQTableEntry::Hash(table_entry) = entry {
+                println!("iteration {:?}", count + 1);
+                println!("testing entries {:?}", table_entry.hash_a as u64 == hash_a && table_entry.hash_b as u64 == hash_b);
+                println!("hash a {:?}, {:?}", table_entry.hash_a, hash_a);
+                println!("hash b {:?}, {:?}\n", table_entry.hash_b, hash_b);
+                if (table_entry.hash_a as u64) == hash_a && (table_entry.hash_b as u64) == hash_b {
+                    result = Some(*table_entry);
+                }
+            };
+        }
+
+        result
     }
 
     fn decompress(data: Vec<u8>) -> Vec<u8> {
-        data
+        let mut decompressor = Decompress::new(false);
+        let mut decompressed_data = vec![];
+        decompressor.decompress(&data, &mut decompressed_data);
+        println!("decompressed {:?}", decompressed_data);
+        decompressed_data
     }
 }
 
@@ -359,4 +452,3 @@ fn main() {
     println!("{:.2?}", now.elapsed());
     println!("file header {:?}", replay.header.header_size);
 }
-
