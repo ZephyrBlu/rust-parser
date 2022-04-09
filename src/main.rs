@@ -1,3 +1,5 @@
+mod protocol;
+
 use std::fs::File;
 use std::io::SeekFrom;
 use std::io::prelude::*;
@@ -349,6 +351,7 @@ impl MPQArchive<'_> {
     }
 
     fn _read_file(file: &mut File, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
+        let now = Instant::now();
         let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
         let hash_entry = match hash_entry_wrapper {
             Some(entry) => entry,
@@ -396,7 +399,6 @@ impl MPQArchive<'_> {
                 block_entry.flags & MPQ_FILE_COMPRESS != 0 &&
                 (force_decompress || block_entry.size > block_entry.archived_size)
             ) {
-                println!("decompressing archive file {:?}", archive_filename);
                 file_data = MPQArchive::decompress(file_data);
             }
 
@@ -453,7 +455,6 @@ use std::time::Instant;
 fn main() {
     let now = Instant::now();
     let archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
-    println!("{:.2?}", now.elapsed());
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
 
     let contents = archive.read_file("replay.tracker.events");
@@ -463,5 +464,7 @@ fn main() {
     let metadata = archive.read_file("replay.gamemetadata.json");
     let string = String::from_utf8(metadata.unwrap());
 
-    println!("game details {:?}", string);
+    println!("files parsed {:.2?}", now.elapsed());
+    protocol::test();
+    println!("protocol parsed {:.2?}", now.elapsed());
 }
