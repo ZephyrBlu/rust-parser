@@ -1,4 +1,5 @@
 mod protocol;
+mod decoders;
 
 use std::fs::File;
 use std::io::SeekFrom;
@@ -379,6 +380,7 @@ impl MPQArchive<'_> {
 
             // file has many sectors that need to be separately decompressed
             if block_entry.flags & MPQ_FILE_SINGLE_UNIT == 0 {
+                panic!("Not implemented yet");
                 // let sector_size = 512 << header.sector_size_shift;
                 // let mut sectors = block_entry.size / sector_size + 1;
 
@@ -434,7 +436,7 @@ impl MPQArchive<'_> {
         if compression_type == 0 {
             return data;
         } else if compression_type == 2 {
-            panic!("zlib compression unsupported");
+            panic!("zlib compression not implemented yet");
         } else if  compression_type == 16 {
             let mut decompressor = Decompress::new(false);
             let mut decompressed_data = Vec::with_capacity(data.len() * COMPRESSION_FACTOR);

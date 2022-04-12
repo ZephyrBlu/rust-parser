@@ -1,3 +1,5 @@
+use crate::decoders::VersionedDecoder;
+use crate::decoders::Decoder;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -375,36 +377,15 @@ fn instantiate_event_types() -> (HashMap<u8, (u8, &'static str)>, HashMap<u8, (u
 }
 
 #[derive(Debug)]
-struct Int(i64, u8);
+pub struct Int(pub i64, pub u8);
 
 #[derive(Debug)]
-struct Blob(i64, u8);
-
-// #[derive(Debug)]
-// struct Choice(i64, u8);
+pub struct Struct(String, u8, i8);
 
 #[derive(Debug)]
-struct Struct(String, u8, i8);
-
-// #[derive(Debug)]
-// struct Bool(i64, u8);
-
-// #[derive(Debug)]
-// struct Optional(i64, u8);
-
-// #[derive(Debug)]
-// struct FourCC(i64, u8);
-
-// #[derive(Debug)]
-// struct Array(i64, u8);
-
-// #[derive(Debug)]
-// struct BitArray(i64, u8);
-
-#[derive(Debug)]
-enum ProtocolTypeInfo {
+pub enum ProtocolTypeInfo {
     Int(Int),
-    Blob(Blob),
+    Blob(Int),
     Choice(Int, HashMap<u8, (String, u8)>),
     Struct(Vec<Struct>),
     Bool,
@@ -426,37 +407,15 @@ fn handle_int(input: &str) -> Int {
     Int(ints.next().unwrap().parse::<i64>().unwrap(), ints.next().unwrap().parse::<u8>().unwrap())
 }
 
-fn handle_blob(input: &str) -> Blob {
-    let mut blob = input.trim_matches(match_typeinfo_structure).split(",");
-    Blob(blob.next().unwrap().parse::<i64>().unwrap(), blob.next().unwrap().parse::<u8>().unwrap())
-}
-
-fn handle_bool(_input: &str) -> ProtocolTypeInfo {
-    ProtocolTypeInfo::Bool
-}
-
 fn handle_array(input: &str) -> ProtocolTypeInfo {
     // structure: [(<int>, <int>), <int>], remove only square brackets first to preserve for int
     let parts = input.trim_matches(|c: char| c == '[' || c == ']').rsplit_once(",").unwrap();
     ProtocolTypeInfo::Array(handle_int(parts.0), parts.1.parse::<u8>().unwrap())
 }
 
-fn handle_null(_input: &str) -> ProtocolTypeInfo {
-    ProtocolTypeInfo::Null
-}
-
-fn handle_bitarray(input: &str) -> ProtocolTypeInfo {
-    let mut bitarray = input.trim_matches(match_typeinfo_structure).split(",");
-    ProtocolTypeInfo::BitArray(Int(bitarray.next().unwrap().parse::<i64>().unwrap(), bitarray.next().unwrap().parse::<u8>().unwrap()))
-}
-
 fn handle_optional(input: &str) -> ProtocolTypeInfo {
     let optional = input.trim_matches(match_typeinfo_structure);
     ProtocolTypeInfo::Optional(optional.parse::<u8>().unwrap())
-}
-
-fn handle_fourcc(_input: &str) -> ProtocolTypeInfo {
-    ProtocolTypeInfo::FourCC
 }
 
 fn parse_choice(input: &str) -> (String, u8) {
@@ -504,28 +463,7 @@ fn handle_struct(input: &str) -> ProtocolTypeInfo {
     ProtocolTypeInfo::Struct(structs)
 }
 
-fn find_type(input: &str) -> String {
-    let mut typename: Vec<char> = vec![];
-    let mut start = false;
-
-    for c in input.chars() {
-        if c == '\'' {
-            if start == true {
-                break;
-            }
-            start = true;
-            continue;
-        }
-
-        if start {
-            typename.push(c);
-        }
-    }
-
-    typename.into_iter().collect()
-}
-
-pub fn test() {    
+fn parse_typeinfos() -> Vec<ProtocolTypeInfo> {
     let mut typeinfos: Vec<ProtocolTypeInfo> = vec![];
     for protocol_type in RAW_TYPEINFOS.lines() {
         let match_outer_structure = |c: char| {
@@ -537,20 +475,19 @@ pub fn test() {
             c.is_numeric()
         };
         let formatted = protocol_type.trim_matches(match_outer_structure);
-        let typename = find_type(formatted);
-        let typeinfo = formatted.split_once(",").unwrap().1;
+        let (typename, typeinfo) = formatted.split_once(",").unwrap();
 
         // println!("typeinfo {:?}", typeinfo);
 
-        let parsed = match typename.as_str() {
+        let parsed = match typename.trim_matches(|c: char| c == '\'') {
             "_int" => ProtocolTypeInfo::Int(handle_int(typeinfo)),
-            "_blob" => ProtocolTypeInfo::Blob(handle_blob(typeinfo)),
-            "_bool" => handle_bool(typeinfo),
+            "_blob" => ProtocolTypeInfo::Blob(handle_int(typeinfo)),
+            "_bool" => ProtocolTypeInfo::Bool,
             "_array" => handle_array(typeinfo),
-            "_null" => handle_null(typeinfo),
-            "_bitarray" => handle_bitarray(typeinfo),
+            "_null" => ProtocolTypeInfo::Null,
+            "_bitarray" => ProtocolTypeInfo::BitArray(handle_int(typeinfo)),
             "_optional" => handle_optional(typeinfo),
-            "_fourcc" => handle_fourcc(typeinfo),
+            "_fourcc" => ProtocolTypeInfo::FourCC,
             "_choice" => handle_choice(typeinfo),
             "_struct" => handle_struct(typeinfo),
             _other => panic!("Found unknown typeinfo {:?}", _other),
@@ -559,5 +496,35 @@ pub fn test() {
         typeinfos.push(parsed);
     }
 
-    let (game_event_types, tracker_event_types, message_event_types) = instantiate_event_types();
+    typeinfos
+}
+
+struct Protocol {
+    typeinfos: Vec<ProtocolTypeInfo>,
+    game_event_types: HashMap<u8, (u8, &'static str)>,
+    tracker_event_types: HashMap<u8, (u8, &'static str)>,
+    message_event_types: HashMap<u8, (u8, &'static str)>,
+}
+
+impl Protocol {
+    pub fn new() -> Protocol {
+        let typeinfos = parse_typeinfos();
+        let (game_event_types, tracker_event_types, message_event_types) = instantiate_event_types();
+
+        Protocol {
+            typeinfos,
+            game_event_types,
+            tracker_event_types,
+            message_event_types
+        }
+    }
+
+    fn decode_replay_tracker_events(&self, contents: Vec<u8>) {
+        let decoder = VersionedDecoder::new(contents, self.typeinfos);
+        let mut gameloop = 0;
+
+        while !VersionedDecoder::done(decoder.buffer) {
+            let start_bits = VersionedDecoder::used_bits(decoder.buffer);
+        }
+    }
 }
