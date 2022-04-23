@@ -467,6 +467,7 @@ fn main() {
     let string = String::from_utf8(metadata.unwrap());
 
     println!("files parsed {:.2?}", now.elapsed());
-    protocol::test();
+    let protocol = protocol::Protocol::new();
+    let result = protocol.decode_replay_tracker_events(contents.unwrap());
     println!("protocol parsed {:.2?}", now.elapsed());
 }

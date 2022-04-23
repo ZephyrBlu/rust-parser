@@ -1,5 +1,6 @@
 use crate::decoders::VersionedDecoder;
 use crate::decoders::Decoder;
+use crate::decoders::DecoderResult;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -243,9 +244,9 @@ const GAME_DETAILS_TYPEID: u8 = 40;
 //  The typeid of NNet.Replay.SInitData (the type used to store the inital lobby).
 const REPLAY_INITDATA_TYPEID: u8 = 73;
 
-fn instantiate_event_types() -> (HashMap<u8, (u8, &'static str)>, HashMap<u8, (u8, &'static str)>, HashMap<u8, (u8, &'static str)>) {
+fn instantiate_event_types() -> (HashMap<i64, (u8, &'static str)>, HashMap<i64, (u8, &'static str)>, HashMap<i64, (u8, &'static str)>) {
     //  Map from protocol NNet.Game.*Event eventid to (typeid, name)
-    let game_event_types: HashMap<u8, (u8, &str)> = HashMap::from([
+    let game_event_types: HashMap<i64, (u8, &str)> = HashMap::from([
         (5, (82, "NNet.s.SUserFinishedLoadingSyncEvent")),
         (7, (81, "NNet.Game.SUserOptionsEvent")),
         (9, (74, "NNet.Game.SBankFileEvent")),
@@ -351,7 +352,7 @@ fn instantiate_event_types() -> (HashMap<u8, (u8, &'static str)>, HashMap<u8, (u
     ]);
 
     //  Map from protocol NNet.Replay.Tracker.*Event eventid to (typeid, name)
-    let tracker_event_types: HashMap<u8, (u8, &str)> = HashMap::from([
+    let tracker_event_types: HashMap<i64, (u8, &str)> = HashMap::from([
         (0, (197, "NNet.Replay.Tracker.SPlayerStatsEvent")),
         (1, (199, "NNet.Replay.Tracker.SUnitBornEvent")),
         (2, (200, "NNet.Replay.Tracker.SUnitDiedEvent")),
@@ -365,7 +366,7 @@ fn instantiate_event_types() -> (HashMap<u8, (u8, &'static str)>, HashMap<u8, (u
     ]);
 
     //  Map from protocol NNet.Game.*Message eventid to (typeid, name)
-    let message_event_types: HashMap<u8, (u8, &str)> = HashMap::from([
+    let message_event_types: HashMap<i64, (u8, &str)> = HashMap::from([
         (0, (192, "NNet.Game.SChatMessage")),
         (1, (193, "NNet.Game.SPingMessage")),
         (2, (194, "NNet.Game.SLoadingProgressMessage")),
@@ -376,17 +377,17 @@ fn instantiate_event_types() -> (HashMap<u8, (u8, &'static str)>, HashMap<u8, (u
     (game_event_types, tracker_event_types, message_event_types)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Int(pub i64, pub u8);
 
 #[derive(Debug)]
-pub struct Struct(String, u8, i8);
+pub struct Struct(pub String, pub u8, pub i8);
 
 #[derive(Debug)]
 pub enum ProtocolTypeInfo {
     Int(Int),
     Blob(Int),
-    Choice(Int, HashMap<u8, (String, u8)>),
+    Choice(Int, HashMap<i64, (String, u8)>),
     Struct(Vec<Struct>),
     Bool,
     Optional(u8),
@@ -430,12 +431,12 @@ fn handle_choice(input: &str) -> ProtocolTypeInfo {
     let raw_choice = input.trim_matches(|c: char| c == '[' || c == ']' || c == '(').split_once("),").unwrap();
     let int = handle_int(raw_choice.0);
 
-    let mut choices = HashMap::<u8, (String, u8)>::new();
+    let mut choices = HashMap::<i64, (String, u8)>::new();
     let raw_choices = raw_choice.1.trim_matches(|c: char| c == '{' || c == '}').split_inclusive("),");
 
     for choice in raw_choices {
         let mut kv_pair = choice.split(":");
-        let key = kv_pair.next().unwrap().parse::<u8>().unwrap();
+        let key = kv_pair.next().unwrap().parse::<i64>().unwrap();
         let value = kv_pair.next().unwrap();
         choices.insert(
             key,
@@ -499,11 +500,11 @@ fn parse_typeinfos() -> Vec<ProtocolTypeInfo> {
     typeinfos
 }
 
-struct Protocol {
+pub struct Protocol {
     typeinfos: Vec<ProtocolTypeInfo>,
-    game_event_types: HashMap<u8, (u8, &'static str)>,
-    tracker_event_types: HashMap<u8, (u8, &'static str)>,
-    message_event_types: HashMap<u8, (u8, &'static str)>,
+    game_event_types: HashMap<i64, (u8, &'static str)>,
+    tracker_event_types: HashMap<i64, (u8, &'static str)>,
+    message_event_types: HashMap<i64, (u8, &'static str)>,
 }
 
 impl Protocol {
@@ -519,12 +520,31 @@ impl Protocol {
         }
     }
 
-    fn decode_replay_tracker_events(&self, contents: Vec<u8>) {
-        let decoder = VersionedDecoder::new(contents, self.typeinfos);
+    pub fn decode_replay_tracker_events(&self, contents: Vec<u8>) {
+        let mut decoder = VersionedDecoder::new(contents, &self.typeinfos);
         let mut gameloop = 0;
 
-        while !VersionedDecoder::done(decoder.buffer) {
-            let start_bits = VersionedDecoder::used_bits(decoder.buffer);
+        let mut count = 0;
+        while !VersionedDecoder::done(&decoder.buffer) && count < 10 {
+            let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
+
+            let delta = decoder.instance(&self.typeinfos, SVARUINT32_TYPEID);
+            println!("current raw delta {:?}", delta);
+
+            let event_id = match decoder.instance(&self.typeinfos, TRACKER_EVENTID_TYPEID) {
+                DecoderResult::Value(value) => value,
+                _other => panic!("event_id is not a value: {:?}", _other),
+            };
+
+            let (type_id, typename) = match self.tracker_event_types.get(&event_id) {
+                Some((type_id, typename)) => (type_id, typename),
+                None => panic!("CorruptedError: event_id({:?})", event_id)
+            };
+
+            let event = decoder.instance(&self.typeinfos, *type_id);
+
+            VersionedDecoder::byte_align(&mut decoder.buffer);
+            count += 1;
         }
     }
 }
