@@ -1,4 +1,5 @@
 use crate::decoders::VersionedDecoder;
+use crate::decoders::BitPackedDecoder;
 use crate::decoders::Decoder;
 use crate::decoders::DecoderResult;
 use std::collections::HashMap;
@@ -541,9 +542,46 @@ impl Protocol {
                 None => panic!("CorruptedError: event_id({:?})", event_id)
             };
 
+            println!("decoding event");
             let event = decoder.instance(&self.typeinfos, *type_id);
+            println!("done {:?}", event);
 
             VersionedDecoder::byte_align(&mut decoder.buffer);
+            count += 1;
+        }
+    }
+
+    pub fn decode_replay_game_events(&self, contents: Vec<u8>) {
+        let mut decoder = BitPackedDecoder::new(contents, &self.typeinfos);
+        let mut gameloop = 0;
+
+        let mut count = 0;
+        while !BitPackedDecoder::done(&decoder.buffer) && count < 10 {
+            let start_bits = BitPackedDecoder::used_bits(&decoder.buffer);
+
+            let delta = decoder.instance(&self.typeinfos, SVARUINT32_TYPEID);
+            println!("current raw delta {:?}", delta);
+
+            let userid = decoder.instance(&self.typeinfos, REPLAY_USERID_TYPEID);
+            println!("current userid {:?}", userid);
+
+            let event_id = match decoder.instance(&self.typeinfos, GAME_EVENTID_TYPEID) {
+                DecoderResult::Value(value) => value,
+                _other => panic!("event_id is not a value: {:?}", _other),
+            };
+            println!("found eventid {:?}", event_id);
+
+            let (type_id, typename) = match self.game_event_types.get(&event_id) {
+                Some((type_id, typename)) => (type_id, typename),
+                None => panic!("CorruptedError: event_id({:?})", event_id)
+            };
+            println!("found event {:?} {:?}", type_id, typename);
+
+            // println!("decoding event");
+            let event = decoder.instance(&self.typeinfos, *type_id);
+            // println!("done {:?}", event);
+
+            BitPackedDecoder::byte_align(&mut decoder.buffer);
             count += 1;
         }
     }

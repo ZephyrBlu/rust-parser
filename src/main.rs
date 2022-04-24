@@ -459,15 +459,21 @@ fn main() {
     let archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
 
-    let contents = archive.read_file("replay.tracker.events");
+    let contents = archive.read_file("replay.tracker.events").unwrap();
     let details = archive.read_file("replay.details");
-    let game_info = archive.read_file("replay.game.events");
+    let game_info = archive.read_file("replay.game.events").unwrap();
     let init_data = archive.read_file("replay.initData");
     let metadata = archive.read_file("replay.gamemetadata.json");
     let string = String::from_utf8(metadata.unwrap());
 
     println!("files parsed {:.2?}", now.elapsed());
     let protocol = protocol::Protocol::new();
-    let result = protocol.decode_replay_tracker_events(contents.unwrap());
+    
+    let tracker_events = protocol.decode_replay_tracker_events(contents);
+    println!("decoded replay tracker events {:.2?}", now.elapsed());
+
+    let game_events = protocol.decode_replay_game_events(game_info);
+    println!("decoding replay game events {:.2?}", now.elapsed());
+
     println!("protocol parsed {:.2?}", now.elapsed());
 }
