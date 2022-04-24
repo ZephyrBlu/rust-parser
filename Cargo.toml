@@ -9,5 +9,6 @@ edition = "2021"
 bzip2 = "0.4.3"
 
 [profile.release]
-lto = "fat"
+# lto = "fat"
 codegen-units = 1
+# opt-level = 3
