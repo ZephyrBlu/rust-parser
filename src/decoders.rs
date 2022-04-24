@@ -3,6 +3,7 @@ use crate::protocol::Int;
 use crate::protocol::Struct;
 use std::collections::HashMap;
 use std::cmp::min;
+use std::str;
 
 pub struct BitPackedBuffer {
     data: Vec<u8>,
@@ -55,7 +56,7 @@ impl BitPackedBuffer {
             panic!("TruncatedError");
         }
 
-        return data;
+        data
     }
 
     fn read_bits(&mut self, bits: u8) -> u128 {
@@ -87,7 +88,6 @@ impl BitPackedBuffer {
             self.next = Some(shifted_next);
             self.nextbits -= copybits as usize;
             resultbits += copybits as u8;
-            println!("current result {:?}", result);
         }
 
         result
@@ -104,36 +104,43 @@ impl BitPackedBuffer {
 }
 
 #[derive(Debug)]
-pub enum DecoderResult<'a> {
+pub enum StructValue {
+    String(String),
+    Int(u8),
+    Struct(HashMap<String, StructValue>),
+    Data(Vec<u32>),
+    Bool(bool),
+    Pair((u8, i8)),
+    Null,
+}
+
+#[derive(Debug)]
+pub enum DecoderResult {
     Value(i64),
-    Data(Vec<u8>),
+    BlobData(Vec<u8>),
+    ArrayData(Vec<u32>),
     Pair((u8, i8)),
     Bool(bool),
-    Struct(HashMap<&'a str, u8>),
+    Struct(HashMap<String, StructValue>),
     Null,
 }
 
 pub trait Decoder {
-    // instance,
-    // byte_align,
-    // done,
-    // used_bits,
-
-    fn instance<'a>(&'a mut self, typeinfos: &'a Vec<ProtocolTypeInfo>, typeid: u8) -> DecoderResult<'a> {
+    fn instance<'a>(&'a mut self, typeinfos: &'a Vec<ProtocolTypeInfo>, typeid: u8) -> DecoderResult {
         if typeid as usize >= typeinfos.len() {
             panic!("CorruptedError");
         }
 
         let typeinfo = &typeinfos[typeid as usize];
-        println!("current typeinfo {:?} {:?}", typeinfo, typeid);
+        // println!("current typeinfo {:?} {:?}", typeinfo, typeid);
 
         match typeinfo {
             ProtocolTypeInfo::Int(bounds) => self._int(*bounds),
             ProtocolTypeInfo::Blob(bounds) => self._blob(*bounds),
             ProtocolTypeInfo::Bool => self._bool(),
-            // ProtocolTypeInfo::Array(bounds, typeid) => self._array(bounds, typeid),
-            // ProtocolTypeInfo::Null => DecoderResult::Null,
-            // ProtocolTypeInfo::BitArray(bounds) => self._bitarray(bounds),
+            ProtocolTypeInfo::Array(bounds, typeid) => self._array(*bounds, *typeid),
+            ProtocolTypeInfo::Null => DecoderResult::Null,
+            ProtocolTypeInfo::BitArray(bounds) => self._bitarray(*bounds),
             ProtocolTypeInfo::Optional(typeid) => self._optional(*typeid),
             // ProtocolTypeInfo::FourCC => self._fourcc(),
             ProtocolTypeInfo::Choice(bounds, fields) => self._choice(*bounds, fields),
@@ -160,9 +167,9 @@ pub trait Decoder {
 
     fn _bool(&mut self) -> DecoderResult;
 
-    // fn _array(&self, bounds: Int, typeid: u8) -> DecoderResult;
+    fn _array(&mut self, bounds: Int, typeid: u8) -> DecoderResult;
 
-    // fn _bitarray(&self, bounds: Int) -> DecoderResult;
+    fn _bitarray(&mut self, bounds: Int) -> DecoderResult;
 
     fn _optional(&mut self, typeid: u8) -> DecoderResult;
 
@@ -170,7 +177,7 @@ pub trait Decoder {
 
     fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (String, u8)>) -> DecoderResult;
 
-    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult<'a>;
+    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult;
 }
 
 impl BitPackedDecoder<'_> {
@@ -182,34 +189,17 @@ impl BitPackedDecoder<'_> {
             typeinfos,
         }
     }
-
-    // fn _int(&self, bounds: Int) -> DecoderResult {
-    //     DecoderResult::Value(bounds.0 + self.buffer.read_bits(bounds.1) as i64)
-    // }
-    // _array,
-    // _bitarray,
-    // _blob,
-    // _bool,
-    // _choice,
-    // _fourcc,
-    // _int,
-    // _optional,
-    // _real32,
-    // _real64,
-    // _struct,
-    // _null,
 }
 
 impl Decoder for BitPackedDecoder<'_> {
     fn _int(&mut self, bounds: Int) -> DecoderResult {
         let read = self.buffer.read_bits(bounds.1);
-        println!("read bits {:?} {:?}", read, bounds);
         DecoderResult::Value(bounds.0 + read as i64)
     }
 
     fn _blob(&mut self, bounds: Int) -> DecoderResult {
         match self._int(bounds) {
-            DecoderResult::Value(value) => DecoderResult::Data(self.buffer.read_aligned_bytes(value as usize).to_vec()),
+            DecoderResult::Value(value) => DecoderResult::BlobData(self.buffer.read_aligned_bytes(value as usize).to_vec()),
             _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
         }
     }
@@ -221,9 +211,37 @@ impl Decoder for BitPackedDecoder<'_> {
         }
     }
 
-    // fn _array(&self, bounds: Int, typeid: u8) -> DecoderResult;
+    fn _array(&mut self, bounds: Int, typeid: u8) -> DecoderResult {
+        match self._int(bounds) {
+            DecoderResult::Value(value) => {
+                let mut result = vec![];
+                for i in 0..value {
+                    let data = match self.instance(self.typeinfos, typeid) {
+                        DecoderResult::Value(_value) => _value,
+                        _other => {
+                            // println!("instance didn't return DecoderResult::Value {:?}", _other);
+                            0
+                        },
+                    };
+                    result.push(data as u32);
+                }
 
-    // fn _bitarray(&self, bounds: Int) -> DecoderResult;
+                DecoderResult::ArrayData(result)
+                
+            },
+            _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
+        }
+    }
+
+    fn _bitarray(&mut self, bounds: Int) -> DecoderResult {
+        match self._int(bounds) {
+            DecoderResult::Value(value) => {
+                let bytes = self.buffer.read_bits(value as u8);
+                DecoderResult::Pair((0, 0))
+            },
+            _other => panic!("instance didn't return DecoderResult::Value {:?}", _other),
+        }
+    }
 
     fn _optional(&mut self, typeid: u8) -> DecoderResult {
         match self._bool() {
@@ -238,7 +256,7 @@ impl Decoder for BitPackedDecoder<'_> {
         }
     }
 
-    // // fn _fourcc(&self) -> DecoderResult;
+    // fn _fourcc(&self) -> DecoderResult;
 
     fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (String, u8)>) -> DecoderResult {
         let tag = match self._int(bounds) {
@@ -255,8 +273,8 @@ impl Decoder for BitPackedDecoder<'_> {
         DecoderResult::Pair((0, 0))
     }
 
-    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult<'a> {
-        let mut result = HashMap::<&str, u8>::new();
+    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult {
+        let mut result = HashMap::<String, StructValue>::new();
         for field in fields {
             // appears that this isn't needed since field is never parent
             // match fields.into_iter().find(|f| f.2 as i64 == tag) {
@@ -275,14 +293,17 @@ impl Decoder for BitPackedDecoder<'_> {
             // };
 
             // field always seems to exist?
-            let res = self.instance(self.typeinfos, field.1);
-            println!("field values {:?} {:?}", field, res);
-            // let field_value = match self.instance(self.typeinfos, field.1) {
-            //     DecoderResult::Value(value) => value,
-            //     DecoderResult::Data(value) => value,
-            //     _other => panic!("field.1 is not a value or blob: {:?}", field),
-            // };
-            // result.insert(field.0.as_str(), field_value as u8);
+            let field_value = match self.instance(self.typeinfos, field.1) {
+                DecoderResult::Value(value) => StructValue::Int(value as u8),
+                DecoderResult::BlobData(values) => StructValue::String(String::from_utf8(values).unwrap()),
+                DecoderResult::ArrayData(values) => StructValue::Data(values),
+                DecoderResult::Struct(value) => StructValue::Struct(value),
+                DecoderResult::Bool(value) => StructValue::Bool(value),
+                DecoderResult::Pair(value) => StructValue::Pair(value),
+                DecoderResult::Null => StructValue::Null,
+            };
+            // println!("field values {:?} {:?}", field, field_value);
+            result.insert(field.0.clone(), field_value);
         }
 
         DecoderResult::Struct(result)
@@ -373,7 +394,7 @@ impl Decoder for VersionedDecoder<'_> {
     fn _blob(&mut self, bounds: Int) -> DecoderResult {
         self.expect_skip(2);
         let length = self._vint();
-        DecoderResult::Data(self.buffer.read_aligned_bytes(length as usize).to_vec())
+        DecoderResult::BlobData(self.buffer.read_aligned_bytes(length as usize).to_vec())
     }
 
     fn _bool(&mut self) -> DecoderResult {
@@ -381,23 +402,28 @@ impl Decoder for VersionedDecoder<'_> {
         DecoderResult::Bool(self.buffer.read_bits(8) != 0)
     }
 
-    // fn _array(&self, bounds: Int, typeid: u8) -> DecoderResult {
-    //     self.expect_skip(0);
-    //     let length = self._vint();
+    fn _array(&mut self, bounds: Int, typeid: u8) -> DecoderResult {
+        self.expect_skip(0);
+        let length = self._vint();
 
-    //     let mut array = vec![];
-    //     for i in 0..length {
-    //         array.push(self.instance(self.typeinfos, typeid));
-    //     }
+        let mut array = vec![];
+        for i in 0..length {
+            let data = match self.instance(self.typeinfos, typeid) {
+                DecoderResult::Value(value) => value,
+                _other => panic!("instance didn't return DecoderResult::Value {:?}", _other),
+            };
+            array.push(data as u32);
+        }
 
-    //     DecoderResult::Data(array)
-    // }
+        DecoderResult::ArrayData(array)
+    }
 
-    // fn _bitarray(&self, bounds: Int) -> DecoderResult {
-    //     self.expect_skip(1);
-    //     let length = self._vint();
-    //     DecoderResult::Pair((length, self.buffer.read_aligned_bytes((length + 7) / 8)))
-    // }
+    fn _bitarray(&mut self, bounds: Int) -> DecoderResult {
+        self.expect_skip(1);
+        let length = self._vint();
+        let bytes = self.buffer.read_aligned_bytes((length as usize + 7) / 8);
+        DecoderResult::Pair((0, 0))
+    }
 
     fn _optional(&mut self, typeid: u8) -> DecoderResult {
         self.expect_skip(4);
@@ -423,9 +449,9 @@ impl Decoder for VersionedDecoder<'_> {
         DecoderResult::Pair((0, 0))
     }
 
-    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult<'a> {
+    fn _struct<'a>(&mut self, fields: &'a Vec<Struct>) -> DecoderResult {
         self.expect_skip(5);
-        let mut result = HashMap::<&str, u8>::new();
+        let mut result = HashMap::<String, StructValue>::new();
         let length = self._vint();
         for i in 0..length {
             let tag = self._vint();
@@ -448,14 +474,18 @@ impl Decoder for VersionedDecoder<'_> {
 
             // field always seems to exist?
             let field = fields.into_iter().find(|f| f.2 as i64 == tag).unwrap();
-            let res = self.instance(self.typeinfos, field.1);
-            // println!("field values {:?} {:?}", field, res);
-            // let field_value = match self.instance(self.typeinfos, field.1) {
-            //     DecoderResult::Value(value) => value,
-            //     DecoderResult::Data(value) => value,
-            //     _other => panic!("field.1 is not a value or blob: {:?}", field),
-            // };
-            // result.insert(field.0.as_str(), field_value as u8);
+            let field_instance = self.instance(self.typeinfos, field.1);
+            // println!("field instance {:?} {:?}", field, field_instance);
+            let field_value = match field_instance {
+                DecoderResult::Value(value) => StructValue::Int(value as u8),
+                DecoderResult::BlobData(values) => StructValue::String(String::from_utf8(values).unwrap()),
+                DecoderResult::ArrayData(values) => StructValue::Data(values),
+                DecoderResult::Struct(value) => StructValue::Struct(value),
+                DecoderResult::Null => StructValue::Null,
+                _other => panic!("field.1 is not a value or blob: {:?}", field),
+            };
+            // println!("field values {:?} {:?}", field, field_value);
+            result.insert(field.0.clone(), field_value);
         }
 
         DecoderResult::Struct(result)
