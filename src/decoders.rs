@@ -15,12 +15,12 @@ pub struct BitPackedBuffer {
 
 pub struct BitPackedDecoder<'a> {
     pub buffer: BitPackedBuffer,
-    typeinfos: &'a Vec<ProtocolTypeInfo>,
+    typeinfos: &'a Vec<ProtocolTypeInfo<'a>>,
 }
 
 pub struct VersionedDecoder<'a> {
     pub buffer: BitPackedBuffer,
-    typeinfos: &'a Vec<ProtocolTypeInfo>,
+    typeinfos: &'a Vec<ProtocolTypeInfo<'a>>,
 }
 
 impl BitPackedBuffer {
@@ -181,7 +181,7 @@ pub trait Decoder {
 }
 
 impl BitPackedDecoder<'_> {
-    pub fn new(contents: Vec<u8>, typeinfos: &Vec<ProtocolTypeInfo>) -> BitPackedDecoder {
+    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a Vec<ProtocolTypeInfo<'static>>) -> BitPackedDecoder<'a> {
         let buffer = BitPackedBuffer::new(contents);
 
         BitPackedDecoder {
@@ -303,7 +303,7 @@ impl Decoder for BitPackedDecoder<'_> {
                 DecoderResult::Null => StructValue::Null,
             };
             // println!("field values {:?} {:?}", field, field_value);
-            result.insert(field.0.clone(), field_value);
+            result.insert(field.0.to_string(), field_value);
         }
 
         DecoderResult::Struct(result)
@@ -311,7 +311,7 @@ impl Decoder for BitPackedDecoder<'_> {
 }
 
 impl VersionedDecoder<'_> {
-    pub fn new(contents: Vec<u8>, typeinfos: &Vec<ProtocolTypeInfo>) -> VersionedDecoder {
+    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a Vec<ProtocolTypeInfo<'static>>) -> VersionedDecoder<'a> {
         let buffer = BitPackedBuffer::new(contents);
 
         VersionedDecoder {
@@ -485,7 +485,7 @@ impl Decoder for VersionedDecoder<'_> {
                 _other => panic!("field.1 is not a value or blob: {:?}", field),
             };
             // println!("field values {:?} {:?}", field, field_value);
-            result.insert(field.0.clone(), field_value);
+            result.insert(field.0.to_string(), field_value);
         }
 
         DecoderResult::Struct(result)

@@ -382,14 +382,14 @@ fn instantiate_event_types() -> (HashMap<i64, (u8, &'static str)>, HashMap<i64, 
 pub struct Int(pub i64, pub u8);
 
 #[derive(Debug)]
-pub struct Struct(pub String, pub u8, pub i8);
+pub struct Struct<'a>(pub &'a str, pub u8, pub i8);
 
 #[derive(Debug)]
-pub enum ProtocolTypeInfo {
+pub enum ProtocolTypeInfo<'a> {
     Int(Int),
     Blob(Int),
     Choice(Int, HashMap<i64, (String, u8)>),
-    Struct(Vec<Struct>),
+    Struct(Vec<Struct<'a>>),
     Bool,
     Optional(u8),
     FourCC,
@@ -456,7 +456,7 @@ fn handle_struct(input: &str) -> ProtocolTypeInfo {
     for protocol_struct in struct_input {
         let mut struct_values = protocol_struct.trim_matches(match_typeinfo_structure).split(",");
         structs.push(Struct(
-            struct_values.next().unwrap().trim_matches(|c: char| c == '\'').to_string(),
+            struct_values.next().unwrap().trim_matches(|c: char| c == '\''),
             struct_values.next().unwrap().parse::<u8>().unwrap(),
             struct_values.next().unwrap().parse::<i8>().unwrap(),
         ));
@@ -465,7 +465,7 @@ fn handle_struct(input: &str) -> ProtocolTypeInfo {
     ProtocolTypeInfo::Struct(structs)
 }
 
-fn parse_typeinfos() -> Vec<ProtocolTypeInfo> {
+fn parse_typeinfos() -> Vec<ProtocolTypeInfo<'static>> {
     let mut typeinfos: Vec<ProtocolTypeInfo> = vec![];
     for protocol_type in RAW_TYPEINFOS.lines() {
         let match_outer_structure = |c: char| {
@@ -502,7 +502,7 @@ fn parse_typeinfos() -> Vec<ProtocolTypeInfo> {
 }
 
 pub struct Protocol {
-    typeinfos: Vec<ProtocolTypeInfo>,
+    typeinfos: Vec<ProtocolTypeInfo<'static>>,
     game_event_types: HashMap<i64, (u8, &'static str)>,
     tracker_event_types: HashMap<i64, (u8, &'static str)>,
     message_event_types: HashMap<i64, (u8, &'static str)>,
