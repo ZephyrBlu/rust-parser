@@ -527,9 +527,9 @@ impl Protocol {
         while !VersionedDecoder::done(&decoder.buffer) {
             let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
 
-            let delta = decoder.instance(&self.typeinfos, SVARUINT32_TYPEID);
+            let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
 
-            let event_id = match decoder.instance(&self.typeinfos, TRACKER_EVENTID_TYPEID) {
+            let event_id = match decoder.instance(&self.typeinfos, &TRACKER_EVENTID_TYPEID) {
                 DecoderResult::Value(value) => value,
                 _other => panic!("event_id is not a value: {:?}", _other),
             };
@@ -539,7 +539,7 @@ impl Protocol {
                 None => panic!("CorruptedError: event_id({:?})", event_id)
             };
 
-            let event = decoder.instance(&self.typeinfos, *type_id);
+            let event = decoder.instance(&self.typeinfos, type_id);
 
             VersionedDecoder::byte_align(&mut decoder.buffer);
         }
@@ -552,11 +552,11 @@ impl Protocol {
         while !BitPackedDecoder::done(&decoder.buffer) {
             let start_bits = BitPackedDecoder::used_bits(&decoder.buffer);
 
-            let delta = decoder.instance(&self.typeinfos, SVARUINT32_TYPEID);
+            let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
 
-            let userid = decoder.instance(&self.typeinfos, REPLAY_USERID_TYPEID);
+            let userid = decoder.instance(&self.typeinfos, &REPLAY_USERID_TYPEID);
 
-            let event_id = match decoder.instance(&self.typeinfos, GAME_EVENTID_TYPEID) {
+            let event_id = match decoder.instance(&self.typeinfos, &GAME_EVENTID_TYPEID) {
                 DecoderResult::Value(value) => value,
                 _other => panic!("event_id is not a value: {:?}", _other),
             };
@@ -566,7 +566,7 @@ impl Protocol {
                 None => panic!("CorruptedError: event_id({:?})", event_id)
             };
 
-            let event = decoder.instance(&self.typeinfos, *type_id);
+            let event = decoder.instance(&self.typeinfos, type_id);
 
             BitPackedDecoder::byte_align(&mut decoder.buffer);
         }

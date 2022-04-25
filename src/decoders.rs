@@ -115,22 +115,23 @@ pub enum DecoderResult<'a> {
 }
 
 pub trait Decoder<'decode> {
-    fn instance<'a>(&'a mut self, typeinfos: &[ProtocolTypeInfo<'decode>], typeid: u8) -> DecoderResult<'decode> {
-        if typeid as usize >= typeinfos.len() {
+    fn instance<'a>(&'a mut self, typeinfos: &[ProtocolTypeInfo<'decode>], typeid: &u8) -> DecoderResult<'decode> {
+        let typeid_size = *typeid as usize;
+        if  typeid_size >= typeinfos.len() {
             panic!("CorruptedError");
         }
 
-        let typeinfo = &typeinfos[typeid as usize];
+        let typeinfo = &typeinfos[typeid_size];
         // println!("current typeinfo {:?} {:?}", typeinfo, typeid);
 
         match typeinfo {
             ProtocolTypeInfo::Int(bounds) => self._int(bounds),
             ProtocolTypeInfo::Blob(bounds) => self._blob(bounds),
             ProtocolTypeInfo::Bool => self._bool(),
-            ProtocolTypeInfo::Array(bounds, typeid) => self._array(bounds, *typeid),
+            ProtocolTypeInfo::Array(bounds, typeid) => self._array(bounds, typeid),
             ProtocolTypeInfo::Null => DecoderResult::Null,
             ProtocolTypeInfo::BitArray(bounds) => self._bitarray(bounds),
-            ProtocolTypeInfo::Optional(typeid) => self._optional(*typeid),
+            ProtocolTypeInfo::Optional(typeid) => self._optional(typeid),
             // ProtocolTypeInfo::FourCC => self._fourcc(),
             ProtocolTypeInfo::Choice(bounds, fields) => self._choice(bounds, fields),
             ProtocolTypeInfo::Struct(fields) => self._struct(fields),
@@ -156,11 +157,11 @@ pub trait Decoder<'decode> {
 
     fn _bool(&mut self) -> DecoderResult<'decode>;
 
-    fn _array(&mut self, bounds: &Int, typeid: u8) -> DecoderResult<'decode>;
+    fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult<'decode>;
 
     fn _bitarray(&mut self, bounds: &Int) -> DecoderResult<'decode>;
 
-    fn _optional(&mut self, typeid: u8) -> DecoderResult<'decode>;
+    fn _optional(&mut self, typeid: &u8) -> DecoderResult<'decode>;
 
     // fn _fourcc(&self) -> DecoderResult;
 
@@ -200,7 +201,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
         }
     }
 
-    fn _array(&mut self, bounds: &Int, typeid: u8) -> DecoderResult<'decode> {
+    fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult<'decode> {
         match self._int(bounds) {
             DecoderResult::Value(value) => {
                 let mut result = vec![];
@@ -232,7 +233,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
         }
     }
 
-    fn _optional(&mut self, typeid: u8) -> DecoderResult<'decode> {
+    fn _optional(&mut self, typeid: &u8) -> DecoderResult<'decode> {
         match self._bool() {
             DecoderResult::Bool(value) => {
                 if value {
@@ -257,7 +258,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
             panic!("CorruptedError");
         }
         let field = &fields[&tag];
-        let choice_res = self.instance(self.typeinfos, field.1);
+        let choice_res = self.instance(self.typeinfos, &field.1);
         // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
         DecoderResult::Pair((0, 0))
     }
@@ -282,7 +283,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
             // };
 
             // field always seems to exist?
-            let field_value = self.instance(self.typeinfos, field.1);
+            let field_value = self.instance(self.typeinfos, &field.1);
             result.insert(field.0, field_value);
         }
 
@@ -382,7 +383,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
         DecoderResult::Bool(self.buffer.read_bits(8) != 0)
     }
 
-    fn _array(&mut self, bounds: &Int, typeid: u8) -> DecoderResult<'decode> {
+    fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult<'decode> {
         self.expect_skip(0);
         let length = self._vint();
 
@@ -406,7 +407,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
         DecoderResult::Pair((0, 0))
     }
 
-    fn _optional(&mut self, typeid: u8) -> DecoderResult<'decode> {
+    fn _optional(&mut self, typeid: &u8) -> DecoderResult<'decode> {
         self.expect_skip(4);
         if self.buffer.read_bits(8) != 0 {
             self.instance(self.typeinfos, typeid)
@@ -425,7 +426,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
             return DecoderResult::Pair((0, 0))
         }
         let field = &fields[&tag];
-        let choice_res = self.instance(self.typeinfos, field.1);
+        let choice_res = self.instance(self.typeinfos, &field.1);
         // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
         DecoderResult::Pair((0, 0))
     }
@@ -455,7 +456,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
 
             // field always seems to exist?
             let field = fields.iter().find(|f| f.2 as i64 == tag).unwrap();
-            let field_value = self.instance(self.typeinfos, field.1);
+            let field_value = self.instance(self.typeinfos, &field.1);
             result.insert(field.0, field_value);
         }
 
