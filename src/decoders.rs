@@ -106,8 +106,8 @@ impl BitPackedBuffer {
 #[derive(Debug)]
 pub enum DecoderResult<'a> {
     Value(i64),
-    BlobData(String),
-    ArrayData(Vec<u32>),
+    Blob(String),
+    Data(Vec<u32>),
     Pair((u8, i8)),
     Bool(bool),
     Struct(HashMap<&'a str, DecoderResult<'a>>),
@@ -188,7 +188,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
 
     fn _blob(&mut self, bounds: Int) -> DecoderResult<'decode> {
         match self._int(bounds) {
-            DecoderResult::Value(value) => DecoderResult::BlobData(String::from_utf8(self.buffer.read_aligned_bytes(value as usize).to_vec()).unwrap()),
+            DecoderResult::Value(value) => DecoderResult::Blob(String::from_utf8(self.buffer.read_aligned_bytes(value as usize).to_vec()).unwrap()),
             _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
         }
     }
@@ -215,7 +215,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
                     result.push(data as u32);
                 }
 
-                DecoderResult::ArrayData(result)
+                DecoderResult::Data(result)
                 
             },
             _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
@@ -373,7 +373,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     fn _blob(&mut self, bounds: Int) -> DecoderResult<'decode> {
         self.expect_skip(2);
         let length = self._vint();
-        DecoderResult::BlobData(String::from_utf8(self.buffer.read_aligned_bytes(length as usize).to_vec()).unwrap())
+        DecoderResult::Blob(String::from_utf8(self.buffer.read_aligned_bytes(length as usize).to_vec()).unwrap())
     }
 
     fn _bool(&mut self) -> DecoderResult<'decode> {
@@ -394,7 +394,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
             array.push(data as u32);
         }
 
-        DecoderResult::ArrayData(array)
+        DecoderResult::Data(array)
     }
 
     fn _bitarray(&mut self, bounds: Int) -> DecoderResult<'decode> {
