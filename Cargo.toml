@@ -9,6 +9,7 @@ edition = "2021"
 # bzip2 = "0.4.3"
 # bzip2-rs = { version = "0.1.2", features = ["rustc_1_51"] }
 bzip2-rs = { git = "https://github.com/paolobarbolini/bzip2-rs", features = ["rustc_1_55"] }
+# mimalloc = { version = "0.1.17", default-features = false }
 
 [profile.release]
 lto = "fat"

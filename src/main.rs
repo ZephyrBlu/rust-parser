@@ -466,32 +466,36 @@ impl MPQArchive<'_> {
 
 use std::time::Instant;
 
+// #[global_allocator]
+// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     let now = Instant::now();
     let mut archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
     // let mut archive = MPQArchive::new("big replay.SC2Replay");
-    println!("read MPQ archive {:.2?}", now.elapsed());
+    // println!("read MPQ archive {:.2?}", now.elapsed());
 
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
-    println!("read header {:.2?}", now.elapsed());
+    // println!("read header {:.2?}", now.elapsed());
 
     let contents = archive.read_file("replay.tracker.events").unwrap();
-    println!("read tracker events {:.2?}", now.elapsed());
+    // println!("read tracker events {:.2?}", now.elapsed());
 
     let details = archive.read_file("replay.details");
-    println!("read details {:.2?}", now.elapsed());
+    // println!("read details {:.2?}", now.elapsed());
 
     let game_info = archive.read_file("replay.game.events").unwrap();
-    println!("read game events {:.2?}", now.elapsed());
+    // println!("read game events {:.2?}", now.elapsed());
 
     let init_data = archive.read_file("replay.initData");
-    println!("read initData {:.2?}", now.elapsed());
+    // println!("read initData {:.2?}", now.elapsed());
 
     let metadata = archive.read_file("replay.gamemetadata.json");
     let string = String::from_utf8(metadata.unwrap());
 
     println!("files parsed {:.2?}", now.elapsed());
     let protocol = protocol::Protocol::new();
+    println!("protocol instantiated {:.2?}", now.elapsed());
     
     let tracker_events = protocol.decode_replay_tracker_events(contents);
     println!("decoded replay tracker events {:.2?}", now.elapsed());
