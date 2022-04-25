@@ -8,7 +8,7 @@ use std::str;
 pub struct BitPackedBuffer {
     data: Vec<u8>,
     used: usize,
-    next: Option<u8>,
+    next: u8,
     nextbits: usize,
     bigendian: bool,
 }
@@ -28,7 +28,7 @@ impl BitPackedBuffer {
         BitPackedBuffer {
             data: contents,
             used: 0,
-            next: None,
+            next: 0,
             nextbits: 0,
             bigendian: true,
         }
@@ -70,22 +70,22 @@ impl BitPackedBuffer {
                     panic!("TruncatedError");
                 }
 
-                self.next = Some(self.data[self.used]);
+                self.next = self.data[self.used];
                 self.used +=1;
                 self.nextbits = 8;
             }
 
             let copybits: u8 = min((bits - resultbits) as usize, self.nextbits) as u8;
             let shifted_copybits: u8 = ((1 << copybits) - 1) as u8;
-            let copy: u128 = (self.next.unwrap() & shifted_copybits) as u128;
+            let copy: u128 = (self.next & shifted_copybits) as u128;
 
             if self.bigendian {
                 result |= copy << (bits - resultbits - copybits);
             } else {
                 result |= copy << resultbits;
             }
-            let shifted_next: u8 = (self.next.unwrap() as u16 >> copybits) as u8;
-            self.next = Some(shifted_next);
+            let shifted_next: u8 = (self.next as u16 >> copybits) as u8;
+            self.next = shifted_next;
             self.nextbits -= copybits as usize;
             resultbits += copybits as u8;
         }
