@@ -104,24 +104,13 @@ impl BitPackedBuffer {
 }
 
 #[derive(Debug)]
-pub enum StructValue<'a> {
-    String(String),
-    Int(u8),
-    Struct(HashMap<&'a str, StructValue<'a>>),
-    Data(Vec<u32>),
-    Bool(bool),
-    Pair((u8, i8)),
-    Null,
-}
-
-#[derive(Debug)]
 pub enum DecoderResult<'a> {
     Value(i64),
-    BlobData(Vec<u8>),
+    BlobData(String),
     ArrayData(Vec<u32>),
     Pair((u8, i8)),
     Bool(bool),
-    Struct(HashMap<&'a str, StructValue<'a>>),
+    Struct(HashMap<&'a str, DecoderResult<'a>>),
     Null,
 }
 
@@ -199,7 +188,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
 
     fn _blob(&mut self, bounds: Int) -> DecoderResult<'decode> {
         match self._int(bounds) {
-            DecoderResult::Value(value) => DecoderResult::BlobData(self.buffer.read_aligned_bytes(value as usize).to_vec()),
+            DecoderResult::Value(value) => DecoderResult::BlobData(String::from_utf8(self.buffer.read_aligned_bytes(value as usize).to_vec()).unwrap()),
             _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
         }
     }
@@ -274,7 +263,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
     }
 
     fn _struct<'a>(&mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode> {
-        let mut result = HashMap::<&str, StructValue>::new();
+        let mut result = HashMap::<&str, DecoderResult>::new();
         for field in fields {
             // appears that this isn't needed since field is never parent
             // match fields.into_iter().find(|f| f.2 as i64 == tag) {
@@ -293,17 +282,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
             // };
 
             // field always seems to exist?
-            let field_value = match self.instance(self.typeinfos, field.1) {
-                DecoderResult::Value(value) => StructValue::Int(value as u8),
-                DecoderResult::BlobData(values) => StructValue::String(String::from_utf8(values).unwrap()),
-                DecoderResult::ArrayData(values) => StructValue::Data(values),
-                DecoderResult::Struct(value) => StructValue::Struct(value),
-                DecoderResult::Bool(value) => StructValue::Bool(value),
-                DecoderResult::Pair(value) => StructValue::Pair(value),
-                DecoderResult::Null => StructValue::Null,
-            };
-            // println!("field values {:?} {:?}", field, field_value);
-            result.insert(field.0, field_value);
+            result.insert(field.0, self.instance(self.typeinfos, field.1));
         }
 
         DecoderResult::Struct(result)
@@ -394,7 +373,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     fn _blob(&mut self, bounds: Int) -> DecoderResult<'decode> {
         self.expect_skip(2);
         let length = self._vint();
-        DecoderResult::BlobData(self.buffer.read_aligned_bytes(length as usize).to_vec())
+        DecoderResult::BlobData(String::from_utf8(self.buffer.read_aligned_bytes(length as usize).to_vec()).unwrap())
     }
 
     fn _bool(&mut self) -> DecoderResult<'decode> {
@@ -451,7 +430,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
 
     fn _struct<'a>(&mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode> {
         self.expect_skip(5);
-        let mut result = HashMap::<&str, StructValue>::new();
+        let mut result = HashMap::<&str, DecoderResult>::new();
         let length = self._vint();
         for i in 0..length {
             let tag = self._vint();
@@ -475,17 +454,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
             // field always seems to exist?
             let field = fields.into_iter().find(|f| f.2 as i64 == tag).unwrap();
             let field_instance = self.instance(self.typeinfos, field.1);
-            // println!("field instance {:?} {:?}", field, field_instance);
-            let field_value = match field_instance {
-                DecoderResult::Value(value) => StructValue::Int(value as u8),
-                DecoderResult::BlobData(values) => StructValue::String(String::from_utf8(values).unwrap()),
-                DecoderResult::ArrayData(values) => StructValue::Data(values),
-                DecoderResult::Struct(value) => StructValue::Struct(value),
-                DecoderResult::Null => StructValue::Null,
-                _other => panic!("field.1 is not a value or blob: {:?}", field),
-            };
-            // println!("field values {:?} {:?}", field, field_value);
-            result.insert(field.0, field_value);
+            result.insert(field.0, field_instance);
         }
 
         DecoderResult::Struct(result)
