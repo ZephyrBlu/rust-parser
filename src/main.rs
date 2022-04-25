@@ -468,8 +468,8 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    // let mut archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
-    let mut archive = MPQArchive::new("big replay.SC2Replay");
+    let mut archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
+    // let mut archive = MPQArchive::new("big replay.SC2Replay");
     // println!("read MPQ archive {:.2?}", now.elapsed());
 
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;

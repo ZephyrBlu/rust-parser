@@ -175,7 +175,7 @@ pub trait Decoder<'decode> {
 
     // fn _fourcc(&self) -> DecoderResult;
 
-    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (String, u8)>) -> DecoderResult<'decode>;
+    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (&str, u8)>) -> DecoderResult<'decode>;
 
     fn _struct<'a>(&'a mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode>;
 }
@@ -258,7 +258,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
 
     // fn _fourcc(&self) -> DecoderResult;
 
-    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (String, u8)>) -> DecoderResult<'decode> {
+    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (&str, u8)>) -> DecoderResult<'decode> {
         let tag = match self._int(bounds) {
             DecoderResult::Value(value) => value,
             _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
@@ -436,7 +436,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
 
     // fn _fourcc(&self) -> DecoderResult;
 
-    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (String, u8)>) -> DecoderResult<'decode> {
+    fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (&str, u8)>) -> DecoderResult<'decode> {
         self.expect_skip(3);
         let tag = self._vint();
         if !fields.contains_key(&tag) {

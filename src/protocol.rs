@@ -388,7 +388,7 @@ pub struct Struct<'a>(pub &'a str, pub u8, pub i8);
 pub enum ProtocolTypeInfo<'a> {
     Int(Int),
     Blob(Int),
-    Choice(Int, HashMap<i64, (String, u8)>),
+    Choice(Int, HashMap<i64, (&'a str, u8)>),
     Struct(Vec<Struct<'a>>),
     Bool,
     Optional(u8),
@@ -420,10 +420,10 @@ fn handle_optional(input: &str) -> ProtocolTypeInfo {
     ProtocolTypeInfo::Optional(optional.parse::<u8>().unwrap())
 }
 
-fn parse_choice(input: &str) -> (String, u8) {
+fn parse_choice(input: &str) -> (&str, u8) {
     let mut choice_values = input.trim_matches(match_typeinfo_structure).split(",");
     (
-        choice_values.next().unwrap().trim_matches(|c: char| c == '\'').to_string(),
+        choice_values.next().unwrap().trim_matches(|c: char| c == '\''),
         choice_values.next().unwrap().parse::<u8>().unwrap(),
     )
 }
@@ -432,7 +432,7 @@ fn handle_choice(input: &str) -> ProtocolTypeInfo {
     let raw_choice = input.trim_matches(|c: char| c == '[' || c == ']' || c == '(').split_once("),").unwrap();
     let int = handle_int(raw_choice.0);
 
-    let mut choices = HashMap::<i64, (String, u8)>::new();
+    let mut choices = HashMap::<i64, (&str, u8)>::new();
     let raw_choices = raw_choice.1.trim_matches(|c: char| c == '{' || c == '}').split_inclusive("),");
 
     for choice in raw_choices {
