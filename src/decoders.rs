@@ -15,12 +15,12 @@ pub struct BitPackedBuffer {
 
 pub struct BitPackedDecoder<'a> {
     pub buffer: BitPackedBuffer,
-    typeinfos: &'a Vec<ProtocolTypeInfo<'a>>,
+    typeinfos: &'a [ProtocolTypeInfo<'a>],
 }
 
 pub struct VersionedDecoder<'a> {
     pub buffer: BitPackedBuffer,
-    typeinfos: &'a Vec<ProtocolTypeInfo<'a>>,
+    typeinfos: &'a [ProtocolTypeInfo<'a>],
 }
 
 impl BitPackedBuffer {
@@ -93,14 +93,14 @@ impl BitPackedBuffer {
         result
     }
 
-    fn read_unaligned_bytes(&mut self, bytes: u8) -> String {
-        let mut read_bytes = String::new();
-        for i in 0..bytes {
-            read_bytes.push_str(&self.read_bits(8).to_string());
-        }
+    // fn read_unaligned_bytes(&mut self, bytes: u8) -> String {
+    //     let mut read_bytes = String::new();
+    //     for i in 0..bytes {
+    //         read_bytes.push_str(&self.read_bits(8).to_string());
+    //     }
 
-        read_bytes
-    }
+    //     read_bytes
+    // }
 }
 
 #[derive(Debug)]
@@ -115,7 +115,7 @@ pub enum DecoderResult<'a> {
 }
 
 pub trait Decoder<'decode> {
-    fn instance<'a>(&'a mut self, typeinfos: &'a Vec<ProtocolTypeInfo<'decode>>, typeid: u8) -> DecoderResult<'decode> {
+    fn instance<'a>(&'a mut self, typeinfos: &[ProtocolTypeInfo<'decode>], typeid: u8) -> DecoderResult<'decode> {
         if typeid as usize >= typeinfos.len() {
             panic!("CorruptedError");
         }
@@ -166,11 +166,11 @@ pub trait Decoder<'decode> {
 
     fn _choice(&mut self, bounds: Int, fields: &HashMap<i64, (&str, u8)>) -> DecoderResult<'decode>;
 
-    fn _struct<'a>(&'a mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode>;
+    fn _struct<'a>(&'a mut self, fields: &[Struct<'decode>]) -> DecoderResult<'decode>;
 }
 
 impl BitPackedDecoder<'_> {
-    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a Vec<ProtocolTypeInfo<'static>>) -> BitPackedDecoder<'a> {
+    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a [ProtocolTypeInfo<'static>]) -> BitPackedDecoder<'a> {
         let buffer = BitPackedBuffer::new(contents);
 
         BitPackedDecoder {
@@ -262,7 +262,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
         DecoderResult::Pair((0, 0))
     }
 
-    fn _struct<'a>(&mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode> {
+    fn _struct<'a>(&mut self, fields: &[Struct<'decode>]) -> DecoderResult<'decode> {
         let mut result = HashMap::<&str, DecoderResult>::new();
         for field in fields {
             // appears that this isn't needed since field is never parent
@@ -290,7 +290,7 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
 }
 
 impl VersionedDecoder<'_> {
-    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a Vec<ProtocolTypeInfo<'static>>) -> VersionedDecoder<'a> {
+    pub fn new<'a>(contents: Vec<u8>, typeinfos: &'a [ProtocolTypeInfo<'static>]) -> VersionedDecoder<'a> {
         let buffer = BitPackedBuffer::new(contents);
 
         VersionedDecoder {
@@ -397,6 +397,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
         DecoderResult::Data(array)
     }
 
+    // this function does not get hit in VersionedDecoder
     fn _bitarray(&mut self, bounds: Int) -> DecoderResult<'decode> {
         self.expect_skip(1);
         let length = self._vint();
@@ -428,7 +429,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
         DecoderResult::Pair((0, 0))
     }
 
-    fn _struct<'a>(&mut self, fields: &'a Vec<Struct<'decode>>) -> DecoderResult<'decode> {
+    fn _struct<'a>(&mut self, fields: &[Struct<'decode>]) -> DecoderResult<'decode> {
         self.expect_skip(5);
         let mut result = HashMap::<&str, DecoderResult>::new();
         let length = self._vint();
@@ -452,7 +453,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
             // };
 
             // field always seems to exist?
-            let field = fields.into_iter().find(|f| f.2 as i64 == tag).unwrap();
+            let field = fields.iter().find(|f| f.2 as i64 == tag).unwrap();
             let field_instance = self.instance(self.typeinfos, field.1);
             result.insert(field.0, field_instance);
         }

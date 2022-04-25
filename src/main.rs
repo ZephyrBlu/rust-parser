@@ -326,13 +326,13 @@ impl MPQArchive<'_> {
         for byte in string.to_uppercase().bytes() {
             let value: u64 = table[&(((hash_type as u64) << 8) + byte as u64)];
             seed1 = (value ^ (seed1 + seed2)) & 0xFFFFFFFF;
-            seed2 = byte as u64 + seed1 + seed2 + (seed2 << 5) + 3 & 0xFFFFFFFF;
+            seed2 = (byte as u64 + seed1 + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF;
         }
 
         seed1
     }
 
-    fn decrypt(table: &HashMap<u64, u64>, data: &Vec<u8>, key: u64) -> Vec<u8> {
+    fn decrypt(table: &HashMap<u64, u64>, data: &[u8], key: u64) -> Vec<u8> {
         let mut seed1: u64 = key;
         let mut seed2: u64 = 0xEEEEEEEE;
         let mut result = vec![];
@@ -348,7 +348,7 @@ impl MPQArchive<'_> {
 
             seed1 = ((!seed1 << 0x15) + 0x11111111) | (seed1 >> 0x0B);
             seed1 &= 0xFFFFFFFF;
-            seed2 = value + seed2 + (seed2 << 5) + 3 & 0xFFFFFFFF;
+            seed2 = (value + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF;
 
             let packed_value: u32 = value.try_into().unwrap();
             result.extend(packed_value.to_le_bytes());
@@ -357,7 +357,7 @@ impl MPQArchive<'_> {
         result
     }
 
-    fn _read_file(file: &mut BufReader<File>, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
+    fn _read_file(file: &mut BufReader<File>, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &[MPQTableEntry], block_table: &[MPQTableEntry], archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
         let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
         let hash_entry = match hash_entry_wrapper {
             Some(entry) => entry,
@@ -420,7 +420,7 @@ impl MPQArchive<'_> {
         MPQArchive::_read_file(&mut self.file, &self.header, &self.encryption_table, &self.hash_table, &self.block_table, archive_filename, false)
     }
 
-    fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, filename: &str) -> Option<HashTableEntry> {
+    fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &[MPQTableEntry], filename: &str) -> Option<HashTableEntry> {
         let hash_a = MPQArchive::hash(encryption_table, filename, MPQHash::HashA);
         let hash_b = MPQArchive::hash(encryption_table, filename, MPQHash::HashB);
 
@@ -470,34 +470,34 @@ fn main() {
     let now = Instant::now();
     let mut archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
     // let mut archive = MPQArchive::new("big replay.SC2Replay");
-    // println!("read MPQ archive {:.2?}", now.elapsed());
+    println!("read MPQ archive {:.2?}", now.elapsed());
 
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
-    // println!("read header {:.2?}", now.elapsed());
+    println!("read header {:.2?}", now.elapsed());
 
     let contents = archive.read_file("replay.tracker.events").unwrap();
-    // println!("read tracker events {:.2?}", now.elapsed());
+    println!("read tracker events {:.2?}", now.elapsed());
 
     let details = archive.read_file("replay.details");
-    // println!("read details {:.2?}", now.elapsed());
+    println!("read details {:.2?}", now.elapsed());
 
     let game_info = archive.read_file("replay.game.events").unwrap();
-    // println!("read game events {:.2?}", now.elapsed());
+    println!("read game events {:.2?}", now.elapsed());
 
     let init_data = archive.read_file("replay.initData");
-    // println!("read initData {:.2?}", now.elapsed());
+    println!("read initData {:.2?}", now.elapsed());
 
     let metadata = archive.read_file("replay.gamemetadata.json");
     let string = String::from_utf8(metadata.unwrap());
 
-    // println!("files parsed {:.2?}", now.elapsed());
+    println!("files parsed {:.2?}", now.elapsed());
     let protocol = protocol::Protocol::new();
     
     let tracker_events = protocol.decode_replay_tracker_events(contents);
-    // println!("decoded replay tracker events {:.2?}", now.elapsed());
+    println!("decoded replay tracker events {:.2?}", now.elapsed());
 
     let game_events = protocol.decode_replay_game_events(game_info);
-    // println!("decoding replay game events {:.2?}", now.elapsed());
+    println!("decoding replay game events {:.2?}", now.elapsed());
 
     println!("protocol parsed {:.2?}", now.elapsed());
 }

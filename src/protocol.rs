@@ -3,7 +3,6 @@ use crate::decoders::BitPackedDecoder;
 use crate::decoders::Decoder;
 use crate::decoders::DecoderResult;
 use std::collections::HashMap;
-use std::str::FromStr;
 
 // Decoding instructions for each protocol type.
 const RAW_TYPEINFOS: &str = "('_int',[(0,7)]),  #0
@@ -405,13 +404,13 @@ fn match_typeinfo_structure(c: char) -> bool {
 }
 
 fn handle_int(input: &str) -> Int {
-    let mut ints = input.trim_matches(match_typeinfo_structure).split(",");
+    let mut ints = input.trim_matches(match_typeinfo_structure).split(',');
     Int(ints.next().unwrap().parse::<i64>().unwrap(), ints.next().unwrap().parse::<u8>().unwrap())
 }
 
 fn handle_array(input: &str) -> ProtocolTypeInfo {
     // structure: [(<int>, <int>), <int>], remove only square brackets first to preserve for int
-    let parts = input.trim_matches(|c: char| c == '[' || c == ']').rsplit_once(",").unwrap();
+    let parts = input.trim_matches(|c: char| c == '[' || c == ']').rsplit_once(',').unwrap();
     ProtocolTypeInfo::Array(handle_int(parts.0), parts.1.parse::<u8>().unwrap())
 }
 
@@ -421,7 +420,7 @@ fn handle_optional(input: &str) -> ProtocolTypeInfo {
 }
 
 fn parse_choice(input: &str) -> (&str, u8) {
-    let mut choice_values = input.trim_matches(match_typeinfo_structure).split(",");
+    let mut choice_values = input.trim_matches(match_typeinfo_structure).split(',');
     (
         choice_values.next().unwrap().trim_matches(|c: char| c == '\''),
         choice_values.next().unwrap().parse::<u8>().unwrap(),
@@ -436,7 +435,7 @@ fn handle_choice(input: &str) -> ProtocolTypeInfo {
     let raw_choices = raw_choice.1.trim_matches(|c: char| c == '{' || c == '}').split_inclusive("),");
 
     for choice in raw_choices {
-        let mut kv_pair = choice.split(":");
+        let mut kv_pair = choice.split(':');
         let key = kv_pair.next().unwrap().parse::<i64>().unwrap();
         let value = kv_pair.next().unwrap();
         choices.insert(
@@ -454,7 +453,7 @@ fn handle_struct(input: &str) -> ProtocolTypeInfo {
 
     let mut structs = vec![];
     for protocol_struct in struct_input {
-        let mut struct_values = protocol_struct.trim_matches(match_typeinfo_structure).split(",");
+        let mut struct_values = protocol_struct.trim_matches(match_typeinfo_structure).split(',');
         structs.push(Struct(
             struct_values.next().unwrap().trim_matches(|c: char| c == '\''),
             struct_values.next().unwrap().parse::<u8>().unwrap(),
@@ -477,7 +476,7 @@ fn parse_typeinfos() -> Vec<ProtocolTypeInfo<'static>> {
             c.is_numeric()
         };
         let formatted = protocol_type.trim_matches(match_outer_structure);
-        let (typename, typeinfo) = formatted.split_once(",").unwrap();
+        let (typename, typeinfo) = formatted.split_once(',').unwrap();
 
         // println!("typeinfo {:?}", typeinfo);
 
