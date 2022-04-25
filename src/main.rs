@@ -3,10 +3,13 @@ mod decoders;
 
 use std::fs::File;
 use std::io::SeekFrom;
+use std::io::BufReader;
 use std::io::prelude::*;
 use std::str;
 use std::collections::HashMap;
-use bzip2::Decompress;
+use std::io::copy;
+// use bzip2::Decompress;
+use bzip2_rs::DecoderReader;
 
 const MPQ_FILE_IMPLODE: u32        = 0x00000100;
 const MPQ_FILE_COMPRESS: u32       = 0x00000200;
@@ -94,6 +97,7 @@ enum MPQTableEntry {
 
 struct MPQArchive<'a> {
     filename: &'a str,
+    file: BufReader<File>,
     header: MPQFileHeader,
     hash_table: Vec<MPQTableEntry>,
     block_table: Vec<MPQTableEntry>,
@@ -103,14 +107,15 @@ struct MPQArchive<'a> {
 
 impl MPQArchive<'_> {
     fn new(filename: &str) -> MPQArchive {
-        let mut file = File::open(filename).expect("Failed to read replay file");
-        let header = MPQArchive::read_header(&mut file);
+        let file = File::open(filename).expect("Failed to read replay file");
+        let mut reader = BufReader::new(file);
+        let header = MPQArchive::read_header(&mut reader);
 
         let encryption_table = MPQArchive::prepare_encryption_table();
-        let hash_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "hash");
-        let block_table = MPQArchive::read_table(&mut file, &header, &encryption_table, "block");
+        let hash_table = MPQArchive::read_table(&mut reader, &header, &encryption_table, "hash");
+        let block_table = MPQArchive::read_table(&mut reader, &header, &encryption_table, "block");
 
-        let contents = MPQArchive::_read_file(&mut file, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
+        let contents = MPQArchive::_read_file(&mut reader, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
         let files = match contents {
             Some(data) => {
                 let file_data = String::from_utf8(data).unwrap();
@@ -121,6 +126,7 @@ impl MPQArchive<'_> {
 
         MPQArchive {
             filename,
+            file: reader,
             header,
             hash_table,
             block_table,
@@ -129,7 +135,7 @@ impl MPQArchive<'_> {
         }
     }
 
-    fn read_header(file: &mut File) -> MPQFileHeader {
+    fn read_header(file: &mut BufReader<File>) -> MPQFileHeader {
         let mut magic = [0; 4];
         file.read_exact(&mut magic).unwrap();
         file.seek(SeekFrom::Start(0));
@@ -144,7 +150,7 @@ impl MPQArchive<'_> {
         }
     }
 
-    fn read_mpq_header(magic: [u8; 4], file: &mut File, user_data_header: Option<MPQUserDataHeader>) -> MPQFileHeader {
+    fn read_mpq_header(magic: [u8; 4], file: &mut BufReader<File>, user_data_header: Option<MPQUserDataHeader>) -> MPQFileHeader {
         let mut header_size = [0; 4];
         let mut archive_size = [0; 4];
         let mut format_version = [0; 2];
@@ -204,7 +210,7 @@ impl MPQArchive<'_> {
         }
     }
 
-    fn read_mpq_user_data_header (magic: [u8; 4], file: &mut File) -> MPQUserDataHeader {
+    fn read_mpq_user_data_header (magic: [u8; 4], file: &mut BufReader<File>) -> MPQUserDataHeader {
         let mut user_data_size = [0; 4];
         let mut mpq_header_offset = [0; 4];
         let mut user_data_header_size = [0; 4];
@@ -228,7 +234,7 @@ impl MPQArchive<'_> {
         }
     }
 
-    fn read_table(file: &mut File, header: &MPQFileHeader, table: &HashMap<u64, u64>, table_entry_type: &str) -> Vec<MPQTableEntry> {
+    fn read_table(file: &mut BufReader<File>, header: &MPQFileHeader, table: &HashMap<u64, u64>, table_entry_type: &str) -> Vec<MPQTableEntry> {
         let (table_offset, table_entries, key) = match table_entry_type {
             "hash" => (
                 header.hash_table_offset,
@@ -351,8 +357,7 @@ impl MPQArchive<'_> {
         result
     }
 
-    fn _read_file(file: &mut File, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
-        let now = Instant::now();
+    fn _read_file(file: &mut BufReader<File>, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, block_table: &Vec<MPQTableEntry>, archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
         let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
         let hash_entry = match hash_entry_wrapper {
             Some(entry) => entry,
@@ -409,9 +414,10 @@ impl MPQArchive<'_> {
         None
     }
 
-    fn read_file(&self, archive_filename: &str) -> Option<Vec<u8>> {
-        let mut file = File::open(self.filename).expect("Failed to read replay file");
-        MPQArchive::_read_file(&mut file, &self.header, &self.encryption_table, &self.hash_table, &self.block_table, archive_filename, false)
+    fn read_file(&mut self, archive_filename: &str) -> Option<Vec<u8>> {
+        // let file = File::open(self.filename).expect("Failed to read replay file");
+        // let mut reader = BufReader::new(file);
+        MPQArchive::_read_file(&mut self.file, &self.header, &self.encryption_table, &self.hash_table, &self.block_table, archive_filename, false)
     }
 
     fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &Vec<MPQTableEntry>, filename: &str) -> Option<HashTableEntry> {
@@ -430,20 +436,26 @@ impl MPQArchive<'_> {
     }
 
     fn decompress(data: Vec<u8>) -> Vec<u8> {
-        const COMPRESSION_FACTOR: usize = 10;
+        // const COMPRESSION_FACTOR: usize = 10;
         let compression_type = data[0];
 
         if compression_type == 0 {
-            return data;
+            data
         } else if compression_type == 2 {
             panic!("zlib compression not implemented yet");
         } else if  compression_type == 16 {
-            let mut decompressor = Decompress::new(false);
-            let mut decompressed_data = Vec::with_capacity(data.len() * COMPRESSION_FACTOR);
-            decompressor.decompress_vec(&mut &data[1..], &mut decompressed_data).unwrap();
-            return decompressed_data;
+            // let mut decompressed_data = Vec::with_capacity(data.len() * (COMPRESSION_FACTOR - 1));
+            let mut decompressed_data = vec![];
+
+            // let mut decompressor = Decompress::new(false);
+            // decompressor.decompress_vec(&mut &data[1..], &mut decompressed_data).unwrap();
+
+            let mut reader = DecoderReader::new(&data[1..]);
+            copy(&mut reader, &mut decompressed_data);
+
+            decompressed_data
         } else {
-            panic!("Unsupported compression type");
+            panic!("Unsupported compression type")
         }
     }
 }
@@ -456,24 +468,36 @@ use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
-    let archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
+    // let mut archive = MPQArchive::new("neural parasite upgrade.SC2Replay");
+    let mut archive = MPQArchive::new("big replay.SC2Replay");
+    // println!("read MPQ archive {:.2?}", now.elapsed());
+
     let header_content = &archive.header.user_data_header.as_ref().expect("No user data header").content;
+    // println!("read header {:.2?}", now.elapsed());
 
     let contents = archive.read_file("replay.tracker.events").unwrap();
+    // println!("read tracker events {:.2?}", now.elapsed());
+
     let details = archive.read_file("replay.details");
+    // println!("read details {:.2?}", now.elapsed());
+
     let game_info = archive.read_file("replay.game.events").unwrap();
+    // println!("read game events {:.2?}", now.elapsed());
+
     let init_data = archive.read_file("replay.initData");
+    // println!("read initData {:.2?}", now.elapsed());
+
     let metadata = archive.read_file("replay.gamemetadata.json");
     let string = String::from_utf8(metadata.unwrap());
 
-    println!("files parsed {:.2?}", now.elapsed());
+    // println!("files parsed {:.2?}", now.elapsed());
     let protocol = protocol::Protocol::new();
     
     let tracker_events = protocol.decode_replay_tracker_events(contents);
-    println!("decoded replay tracker events {:.2?}", now.elapsed());
+    // println!("decoded replay tracker events {:.2?}", now.elapsed());
 
     let game_events = protocol.decode_replay_game_events(game_info);
-    println!("decoding replay game events {:.2?}", now.elapsed());
+    // println!("decoding replay game events {:.2?}", now.elapsed());
 
     println!("protocol parsed {:.2?}", now.elapsed());
 }
