@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::io::copy;
 // use bzip2::Decompress;
 use bzip2_rs::DecoderReader;
+// use bzip2_rs::ParallelDecoderReader;
+// use bzip2_rs::RayonThreadPool;
 
 const MPQ_FILE_IMPLODE: u32        = 0x00000100;
 const MPQ_FILE_COMPRESS: u32       = 0x00000200;
@@ -79,11 +81,11 @@ struct HashTableEntry {
 
 // MPQHashTableEntry.struct_format = '2I 2H I'
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct BlockTableEntry {
     offset: u32,
-    archived_size: u32,
-    size: u32,
+    archived_size: usize,
+    size: usize,
     flags: u32,
 }
 
@@ -95,17 +97,18 @@ enum MPQTableEntry {
     Block(BlockTableEntry),
 }
 
-struct MPQArchive<'a> {
-    filename: &'a str,
+struct MPQArchive {
     file: BufReader<File>,
     header: MPQFileHeader,
     hash_table: Vec<MPQTableEntry>,
     block_table: Vec<MPQTableEntry>,
-    files: Option<String>,
     encryption_table: HashMap<u64, u64>,
+    compressed: Vec<u8>,
+    decompressed_offsets: Vec<usize>,
+    compression_type: u8,
 }
 
-impl MPQArchive<'_> {
+impl MPQArchive {
     fn new(filename: &str) -> MPQArchive {
         let file = File::open(filename).expect("Failed to read replay file");
         let mut reader = BufReader::new(file);
@@ -114,24 +117,26 @@ impl MPQArchive<'_> {
         let encryption_table = MPQArchive::prepare_encryption_table();
         let hash_table = MPQArchive::read_table(&mut reader, &header, &encryption_table, "hash");
         let block_table = MPQArchive::read_table(&mut reader, &header, &encryption_table, "block");
-
-        let contents = MPQArchive::_read_file(&mut reader, &header, &encryption_table, &hash_table, &block_table, "(listfile)", false);
-        let files = match contents {
-            Some(data) => {
-                let file_data = String::from_utf8(data).unwrap();
-                Some(file_data)
-            },
-            None => None,
-        };
+        // let block_table_entry = MPQArchive::read_block_entry(
+        //     "(listfile)",
+        //     &encryption_table,
+        //     &hash_table,
+        //     &block_table,
+        // ).expect("Couldn't find block table entry");
+        // let contents = MPQArchive::_read_file(&mut reader, &header, &block_table_entry, false);
+        let compressed = vec![];
+        let decompressed_offsets = vec![];
+        let compression_type = 0;
 
         MPQArchive {
-            filename,
             file: reader,
             header,
             hash_table,
             block_table,
-            files,
-            encryption_table
+            encryption_table,
+            compressed,
+            decompressed_offsets,
+            compression_type,
         }
     }
 
@@ -278,8 +283,8 @@ impl MPQArchive<'_> {
                 },
                 "block" => {
                     let offset = u32::from_le_bytes(table_entry[0..4].try_into().unwrap());
-                    let archived_size = u32::from_le_bytes(table_entry[4..8].try_into().unwrap());
-                    let size = u32::from_le_bytes(table_entry[8..12].try_into().unwrap());
+                    let archived_size = u32::from_le_bytes(table_entry[4..8].try_into().unwrap()) as usize;
+                    let size = u32::from_le_bytes(table_entry[8..12].try_into().unwrap()) as usize;
                     let flags = u32::from_le_bytes(table_entry[12..16].try_into().unwrap());
 
                     MPQTableEntry::Block(BlockTableEntry {
@@ -357,17 +362,12 @@ impl MPQArchive<'_> {
         result
     }
 
-    fn _read_file(file: &mut BufReader<File>, header: &MPQFileHeader, encryption_table: &HashMap<u64, u64>, hash_table: &[MPQTableEntry], block_table: &[MPQTableEntry], archive_filename: &str, force_decompress: bool) -> Option<Vec<u8>> {
-        let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
-        let hash_entry = match hash_entry_wrapper {
-            Some(entry) => entry,
-            None => return None,
-        };
-        let block_entry = match &block_table[hash_entry.block_table_index as usize] {
-            MPQTableEntry::Block(entry) => entry,
-            _other => panic!("Not block entry"),
-        };
-
+    fn _read_file(
+        file: &mut BufReader<File>,
+        header: &MPQFileHeader,
+        block_entry: &BlockTableEntry,
+        force_decompress: bool
+    ) -> Option<Vec<u8>> {
         if block_entry.flags & MPQ_FILE_EXISTS != 0 {
             if block_entry.archived_size == 0 {
                 return None;
@@ -414,10 +414,41 @@ impl MPQArchive<'_> {
         None
     }
 
+    fn read_block_entry(
+        archive_filename: &str,
+        encryption_table: &HashMap<u64, u64>,
+        hash_table: &[MPQTableEntry],
+        block_table: &[MPQTableEntry],
+    ) -> Option<BlockTableEntry> {
+        let hash_entry_wrapper = MPQArchive::get_hash_table_entry(encryption_table, hash_table, archive_filename);
+        let hash_entry = match hash_entry_wrapper {
+            Some(entry) => entry,
+            None => return None,
+        };
+
+        match &block_table[hash_entry.block_table_index as usize] {
+            MPQTableEntry::Block(entry) => Some(*entry),
+            _other => panic!("Not block entry"),
+        }
+    }
+
     fn read_file(&mut self, archive_filename: &str) -> Option<Vec<u8>> {
         // let file = File::open(self.filename).expect("Failed to read replay file");
         // let mut reader = BufReader::new(file);
-        MPQArchive::_read_file(&mut self.file, &self.header, &self.encryption_table, &self.hash_table, &self.block_table, archive_filename, false)
+        let block_table_entry = MPQArchive::read_block_entry(
+            archive_filename,
+            &self.encryption_table,
+            &self.hash_table,
+            &self.block_table,
+        ).expect("Couldn't find block table entry");
+        let force_decompress = false;
+
+        MPQArchive::_read_file(
+            &mut self.file,
+            &self.header,
+            &block_table_entry,
+            force_decompress,
+        )
     }
 
     fn get_hash_table_entry(encryption_table: &HashMap<u64, u64>, hash_table: &[MPQTableEntry], filename: &str) -> Option<HashTableEntry> {
@@ -436,7 +467,6 @@ impl MPQArchive<'_> {
     }
 
     fn decompress(data: Vec<u8>) -> Vec<u8> {
-        // const COMPRESSION_FACTOR: usize = 10;
         let compression_type = data[0];
 
         if compression_type == 0 {
@@ -444,12 +474,13 @@ impl MPQArchive<'_> {
         } else if compression_type == 2 {
             panic!("zlib compression not implemented yet");
         } else if  compression_type == 16 {
-            // let mut decompressed_data = Vec::with_capacity(data.len() * (COMPRESSION_FACTOR - 1));
-            let mut decompressed_data = vec![];
-
             // let mut decompressor = Decompress::new(false);
             // decompressor.decompress_vec(&mut &data[1..], &mut decompressed_data).unwrap();
 
+            // let mut reader = ParallelDecoderReader::new(Cursor::new(data), RayonThreadPool, usize::max_value());
+            // copy(&mut reader, output);
+
+            let mut decompressed_data = vec![];
             let mut reader = DecoderReader::new(&data[1..]);
             copy(&mut reader, &mut decompressed_data);
 
@@ -479,19 +510,19 @@ fn main() {
     // println!("read header {:.2?}", now.elapsed());
 
     let contents = archive.read_file("replay.tracker.events").unwrap();
-    // println!("read tracker events {:.2?}", now.elapsed());
-
-    let details = archive.read_file("replay.details");
-    // println!("read details {:.2?}", now.elapsed());
+    println!("read tracker events {:.2?}", now.elapsed());
 
     let game_info = archive.read_file("replay.game.events").unwrap();
-    // println!("read game events {:.2?}", now.elapsed());
+    println!("read game events {:.2?}", now.elapsed());
 
-    let init_data = archive.read_file("replay.initData");
-    // println!("read initData {:.2?}", now.elapsed());
+    let init_data = archive.read_file("replay.initData").unwrap();
+    println!("read details {:.2?}", now.elapsed());
 
-    let metadata = archive.read_file("replay.gamemetadata.json");
-    let string = String::from_utf8(metadata.unwrap());
+    let metadata = archive.read_file("replay.gamemetadata.json").unwrap();
+    let string = str::from_utf8(&metadata).unwrap();
+    println!("read metadata {:.2?}", now.elapsed());
+
+    let details = archive.read_file("replay.details").unwrap();
 
     println!("files parsed {:.2?}", now.elapsed());
     let protocol = protocol::Protocol::new();
