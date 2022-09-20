@@ -1,3 +1,4 @@
 /target
+.DS_Store
 *.SC2Replay
 *perf*
