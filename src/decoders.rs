@@ -92,14 +92,14 @@ impl BitPackedBuffer {
     result
   }
 
-  // fn read_unaligned_bytes(&mut self, bytes: u8) -> String {
-  //   let mut read_bytes = String::new();
-  //   for i in 0..bytes {
-  //   read_bytes.push_str(&self.read_bits(8).to_string());
-  //   }
+  fn read_unaligned_bytes(&mut self, bytes: u8) -> String {
+    let mut read_bytes = String::new();
+    for i in 0..bytes {
+      read_bytes.push_str(&self.read_bits(8).to_string());
+    }
 
-  //   read_bytes
-  // }
+    read_bytes
+  }
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +108,7 @@ pub enum DecoderResult<'a> {
   Value(i64),
   Blob(String),
   Data(Vec<u32>),
+  DataFragment(u32),
   Pair((u8, i8)),
   Bool(bool),
   // Struct(HashMap<&'a str, DecoderResult<'a>>),
@@ -137,7 +138,7 @@ pub trait Decoder<'decode> {
       ProtocolTypeInfo::Null => DecoderResult::Null,
       ProtocolTypeInfo::BitArray(bounds) => self._bitarray(bounds),
       ProtocolTypeInfo::Optional(typeid) => self._optional(typeid),
-      // ProtocolTypeInfo::FourCC => self._fourcc(),
+      ProtocolTypeInfo::FourCC => self._fourcc(),
       ProtocolTypeInfo::Choice(bounds, fields) => self._choice(bounds, fields),
       ProtocolTypeInfo::Struct(fields) => self._struct(fields),
       _other => panic!("Unknown typeinfo {:?}", _other),
@@ -168,7 +169,7 @@ pub trait Decoder<'decode> {
 
   fn _optional(&mut self, typeid: &u8) -> DecoderResult<'decode>;
 
-  // fn _fourcc(&self) -> DecoderResult;
+  fn _fourcc(&mut self) -> DecoderResult<'decode>;
 
   fn _choice(
     &mut self,
@@ -258,7 +259,9 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
     }
   }
 
-  // fn _fourcc(&self) -> DecoderResult;
+  fn _fourcc(&mut self) -> DecoderResult<'decode> {
+    DecoderResult::Blob(self.buffer.read_unaligned_bytes(4))
+  }
 
   fn _choice(
     &mut self,
@@ -422,10 +425,11 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     let mut array = Vec::with_capacity(length as usize);
     for i in 0..length {
       let data = match self.instance(self.typeinfos, typeid) {
-        DecoderResult::Value(value) => value,
+        DecoderResult::Value(value) => DecoderResult::DataFragment(value as u32),
+        DecoderResult::Struct(values) => DecoderResult::Struct(values),
         _other => panic!("instance didn't return DecoderResult::Value {:?}", _other),
       };
-      array.push(data as u32);
+      array.push(data);
     }
 
     DecoderResult::Data(array)
@@ -448,7 +452,14 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     }
   }
 
-  // fn _fourcc(&self) -> DecoderResult;
+  fn _fourcc(&mut self) -> DecoderResult<'decode> {
+    self.expect_skip(7);
+    DecoderResult::Blob(
+      str::from_utf8(self.buffer.read_aligned_bytes(4))
+        .unwrap_or("")
+        .to_string()
+    )
+  }
 
   fn _choice(
     &mut self,
