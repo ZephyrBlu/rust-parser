@@ -2,6 +2,7 @@ use crate::decoders::BitPackedDecoder;
 use crate::decoders::Decoder;
 use crate::decoders::DecoderResult;
 use crate::decoders::VersionedDecoder;
+use crate::replay::Event;
 use std::collections::HashMap;
 
 // Decoding instructions for each protocol type.
@@ -580,10 +581,15 @@ impl Protocol {
     }
   }
 
-  pub fn decode_replay_tracker_events(&self, contents: Vec<u8>) -> Vec<DecoderResult> {
+  pub fn decode_replay_details(&self, contents: Vec<u8>) -> DecoderResult {
+    let mut decoder = VersionedDecoder::new(contents, &self.typeinfos);
+    decoder.instance(&self.typeinfos, &GAME_DETAILS_TYPEID)
+  }
+
+  pub fn decode_replay_tracker_events(&self, contents: Vec<u8>) -> Vec<Event> {
     let mut decoder = VersionedDecoder::new(contents, &self.typeinfos);
     let mut gameloop = 0;
-    let mut events: Vec<DecoderResult> = vec![];
+    let mut events: Vec<Event> = vec![];
 
     while !VersionedDecoder::done(&decoder.buffer) {
       let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
@@ -601,9 +607,9 @@ impl Protocol {
       };
 
       let event = match decoder.instance(&self.typeinfos, type_id) {
-        DecoderResult::Struct(mut values) => {
-          values.push(("_event", DecoderResult::Name(typename)));
-          DecoderResult::Struct(values)
+        DecoderResult::Struct(mut entries) => {
+          entries.push(("_event", DecoderResult::Name(typename)));
+          Event::new(entries)
         }
         _other => panic!("Only supports Structs"),
       };
@@ -615,10 +621,10 @@ impl Protocol {
     events
   }
 
-  pub fn decode_replay_game_events(&self, contents: Vec<u8>) -> Vec<DecoderResult> {
+  pub fn decode_replay_game_events(&self, contents: Vec<u8>) -> Vec<Event> {
     let mut decoder = BitPackedDecoder::new(contents, &self.typeinfos);
     let mut gameloop = 0;
-    let mut events: Vec<DecoderResult> = vec![];
+    let mut events: Vec<Event> = vec![];
 
     while !BitPackedDecoder::done(&decoder.buffer) {
       let start_bits = BitPackedDecoder::used_bits(&decoder.buffer);
@@ -638,9 +644,9 @@ impl Protocol {
       };
 
       let event = match decoder.instance(&self.typeinfos, type_id) {
-        DecoderResult::Struct(mut values) => {
-          values.push(("_event", DecoderResult::Name(typename)));
-          DecoderResult::Struct(values)
+        DecoderResult::Struct(mut entries) => {
+          entries.push(("_event", DecoderResult::Name(typename)));
+          Event::new(entries)
         }
         _other => panic!("Only supports Structs"),
       };
