@@ -44,17 +44,17 @@ use std::time::Instant;
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/ASUS ROG/Playoffs/3 - Ro2/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/"); // /ASUS ROG/Playoffs/3 - Ro2/");
   let mut replays: Vec<Replay> = vec![];
   visit_dirs(&mut replays, replay_dir).unwrap();
 
   let num_replays = replays.len();
   println!("visited {:?} files in {:.2?}", num_replays, now.elapsed());
 
-  for mut replay in replays {
+  'replay: for mut replay in replays {
     let parsed = replay.parse();
 
-    println!("player_info {:?}", parsed.player_info);
+    // println!("player_info {:?}", parsed.player_info);
 
     let mut player_id: u8 = 0;
     let mut workers_active: [u32; 2] = [0, 0];
@@ -74,6 +74,8 @@ fn main() {
           continue;
         }
       };
+
+      // println!("event entries {:?}", event.entries);
 
       for (field, value) in &event.entries {
         // println!("event entry values {:?} {:?}", field, value);
@@ -100,7 +102,10 @@ fn main() {
             let mut event_minerals_unspent_resources: u16 = 0;
             let mut event_gas_unspent_resources: u16 = 0;
 
-            println!("player index {:?} {:?}", player_index, player_id);
+            // only support 2 player games
+            if player_index > 1 {
+              continue 'replay;
+            }
 
             for (key, value) in entries {
               match *key {
