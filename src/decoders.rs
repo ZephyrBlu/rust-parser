@@ -94,7 +94,7 @@ impl BitPackedBuffer {
 
   fn read_unaligned_bytes(&mut self, bytes: u8) -> String {
     let mut read_bytes = String::new();
-    for i in 0..bytes {
+    for _ in 0..bytes {
       read_bytes.push_str(&self.read_bits(8).to_string());
     }
 
@@ -107,11 +107,10 @@ pub enum DecoderResult<'a> {
   Name(&'a &'a str),
   Value(i64),
   Blob(String),
-  Data(Vec<u32>),
+  Array(Vec<DecoderResult<'a>>),
   DataFragment(u32),
   Pair((u8, i8)),
   Bool(bool),
-  // Struct(HashMap<&'a str, DecoderResult<'a>>),
   Struct(Vec<(&'a str, DecoderResult<'a>)>),
   Null,
 }
@@ -218,19 +217,17 @@ impl<'decode> Decoder<'decode> for BitPackedDecoder<'decode> {
   fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult<'decode> {
     match self._int(bounds) {
       DecoderResult::Value(value) => {
-        let mut result = Vec::with_capacity(value as usize);
-        for i in 0..value {
+        let mut array = Vec::with_capacity(value as usize);
+        for _i in 0..value {
           let data = match self.instance(self.typeinfos, typeid) {
-            DecoderResult::Value(_value) => _value,
-            _other => {
-              // println!("instance didn't return DecoderResult::Value {:?}", _other);
-              0
-            }
+            DecoderResult::Value(value) => DecoderResult::DataFragment(value as u32),
+            DecoderResult::Struct(values) => DecoderResult::Struct(values),
+            _other => panic!("instance returned DecoderResult::{:?}", _other),
           };
-          result.push(data as u32);
+          array.push(data);
         }
 
-        DecoderResult::Data(result)
+        DecoderResult::Array(array)
       }
       _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
     }
@@ -353,7 +350,7 @@ impl VersionedDecoder<'_> {
     if skip == 0 {
       // array
       let length = self._vint();
-      for i in 0..length {
+      for _ in 0..length {
         self._skip_instance();
       }
     } else if skip == 1 {
@@ -377,7 +374,7 @@ impl VersionedDecoder<'_> {
     } else if skip == 5 {
       // struct
       let length = self._vint();
-      for i in 0..length {
+      for _ in 0..length {
         let tag = self._vint();
         self._skip_instance();
       }
@@ -408,7 +405,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     let length = self._vint();
     DecoderResult::Blob(
       str::from_utf8(self.buffer.read_aligned_bytes(length as usize))
-        .unwrap()
+        .unwrap_or("")
         .to_string(),
     )
   }
@@ -423,16 +420,17 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     let length = self._vint();
 
     let mut array = Vec::with_capacity(length as usize);
-    for i in 0..length {
+    for _ in 0..length {
       let data = match self.instance(self.typeinfos, typeid) {
         DecoderResult::Value(value) => DecoderResult::DataFragment(value as u32),
         DecoderResult::Struct(values) => DecoderResult::Struct(values),
-        _other => panic!("instance didn't return DecoderResult::Value {:?}", _other),
+        DecoderResult::Blob(value) => DecoderResult::Blob(value),
+        _other => panic!("instance returned DecoderResult::{:?}", _other),
       };
       array.push(data);
     }
 
-    DecoderResult::Data(array)
+    DecoderResult::Array(array)
   }
 
   // this function does not get hit in VersionedDecoder
@@ -483,7 +481,7 @@ impl<'decode> Decoder<'decode> for VersionedDecoder<'decode> {
     // let mut result = HashMap::<&str, DecoderResult>::new();
     let mut result = Vec::with_capacity(fields.len());
     let length = self._vint();
-    for i in 0..length {
+    for _ in 0..length {
       let tag = self._vint();
 
       // appears that this isn't needed since field is never parent

@@ -76,7 +76,7 @@ fn main() {
       };
 
       for (field, value) in &event.entries {
-        println!("event entry values {:?} {:?}", field, value);
+        // println!("event entry values {:?} {:?}", field, value);
         match *field {
           "m_playerId" => player_id = if let DecoderResult::Value(v) = value {
             *v as u8
@@ -124,7 +124,6 @@ fn main() {
                 "m_scoreValueMineralsLostArmy" |
                 "m_scoreValueMineralsLostEconomy" |
                 "m_scoreValueMineralsLostTechnology" => if let DecoderResult::Value(minerals) = value {
-                  println!("lost minerals {:?} {:?}", key, minerals);
                   event_minerals_lost += minerals.abs();
                   event_minerals_produced += minerals;
                 }
