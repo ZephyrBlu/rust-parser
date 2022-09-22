@@ -21,7 +21,7 @@ impl<'a> Event<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Player<'a> {
+pub struct PlayerMetadata<'a> {
   pub PlayerID: u8,
   pub APM: f32,
   pub Result: &'a str,
@@ -38,7 +38,7 @@ pub struct Metadata<'a> {
   pub BaseBuild: &'a str,
   pub Duration: u16,
   pub IsNotAvailable: bool,
-  pub Players: Vec<Player<'a>>,
+  pub Players: Vec<PlayerMetadata<'a>>,
 }
 
 #[derive(Debug)]

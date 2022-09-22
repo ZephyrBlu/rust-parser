@@ -52,21 +52,21 @@ enum SummaryStat {
 }
 
 #[derive(Serialize)]
-struct Player<'a> {
+struct Player {
   id: u8,
-  name: &'a str,
-  race: &'a str,
+  name: String,
+  race: String,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
 enum ReplayEntry<'a> {
-  Players(Vec<Player<'a>>),
+  Players(Vec<Player>),
   Winner(u8),
   GameLength(u16),
   // Map(&'a DecoderResult<'a>), // &str
   // PlayedAt(&'a DecoderResult<'a>), // u32
-  Map(&'a str),
+  Map(String),
   PlayedAt(u32),
   SummaryStats(HashMap<u8, HashMap<&'a str, SummaryStat>>),
   Metadata(&'a str),
@@ -82,7 +82,7 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/ASUS ROG/Playoffs/3 - Ro2/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   visit_dirs(&mut replays, replay_dir).unwrap();
 
@@ -270,7 +270,7 @@ fn main() {
     let mut summary_stats = HashMap::new();
     for player_index in 0..2 {
       let player_summary_stats = HashMap::from([
-        ("avg_collection_rate", SummaryStat::ResourceValues(avg_unspent_resources[player_index])),
+        ("avg_collection_rate", SummaryStat::ResourceValues(avg_collection_rate[player_index])),
         ("resources_collected", SummaryStat::ResourceValues(resources_collected[player_index])),
         ("resources_lost", SummaryStat::ResourceValues(resources_lost[player_index])),
         ("avg_unspent_resources", SummaryStat::ResourceValues(avg_unspent_resources[player_index])),
@@ -282,26 +282,76 @@ fn main() {
 
     let parsed_metadata: replay::Metadata = serde_json::from_str(&parsed.metadata).unwrap();
 
-    let players = vec![];
+    let (_, player_list) = &parsed.player_info
+      .iter()
+      .find(|(field, _)| *field == "m_playerList")
+      .unwrap();
+
+    let mut players = vec![];
+    match player_list {
+      DecoderResult::Array(values) => {
+        // TODO: enumerated id is incorrect for P1 and P2 in games
+        for (id, player) in values.iter().enumerate() {
+          match player {
+            DecoderResult::Struct(player_values) => {
+              let raw_race = &player_values
+                .iter()
+                .find(|(field, _)| *field == "m_race")
+                .unwrap().1;
+              let mut race = String::new();
+              if let DecoderResult::Blob(value) = raw_race {
+                race = value.clone();
+              }
+
+              let raw_name = &player_values
+                .iter()
+                .find(|(field, _)| *field == "m_name")
+                .unwrap().1;
+              let mut name = String::new();
+              if let DecoderResult::Blob(value) = raw_name {
+                name = value.clone();
+              }
+
+              players.push(Player {
+                id: (id + 1) as u8,
+                race,
+                name,
+              });
+            },
+            _other => panic!("Found DecoderResult::{:?}", _other)
+          }
+        }
+      },
+      _other => panic!("Found DecoderResult::{:?}", _other)
+    }
+
     let winner = parsed_metadata.Players
       .iter()
       .find(|player| player.Result == "Win")
       .unwrap().PlayerID;
     let game_length = parsed_metadata.Duration;
-    // let map = &parsed.player_info
-    //   .iter()
-    //   .find(|(key, _)| *key == "m_title")
-    //   .unwrap().1;
-    // let played_at = &parsed.player_info
-    //   .iter()
-    //   .find(|(key, _)| *key == "m_timeUTC")
-    //   .unwrap().1;
 
-    // let players = vec![];
-    // let winner = 1;
-    // let game_length = 0;
-    let map = "";
-    let played_at = 0;
+    let raw_map = &parsed.player_info
+      .iter()
+      .find(|(field, _)| *field == "m_title")
+      .unwrap().1;
+    let mut map = String::new();
+    if let DecoderResult::Blob(value) = raw_map {
+      map = value.clone();
+    }
+
+    let raw_played_at = &parsed.player_info
+      .iter()
+      .find(|(field, _)| *field == "m_timeUTC")
+      .unwrap().1;
+    let mut played_at = 0;
+    if let DecoderResult::Value(value) = raw_played_at {
+      // TODO: this truncation is not working properly
+      played_at = value.clone() as u32;
+    }
+
+    // let map = "CHANGE MAP NAME";
+    // let played_at = 0;
 
     let replay_summary: ReplaySummary = HashMap::from([
       ("players", ReplayEntry::Players(players)),
@@ -318,7 +368,7 @@ fn main() {
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
-  let output = File::create("replays.json").unwrap();
+  let output = File::create("../sc2.gg/src/assets/replays.json").unwrap();
   serde_json::to_writer(&output, &result);
 
   println!("replays serialized in {:?}", now.elapsed());
