@@ -6,7 +6,10 @@ mod replay;
 use crate::replay::Replay;
 use crate::decoders::DecoderResult;
 
+use serde::Serialize;
+use std::collections::HashMap;
 use std::fs::read_dir;
+use std::fs::File;
 use std::io::Result;
 
 use std::path::Path;
@@ -41,15 +44,55 @@ use std::time::Instant;
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+#[derive(Serialize)]
+#[serde(untagged)]
+enum SummaryStat {
+  ResourceValues((u16, u16)),
+  Value(u16),
+}
+
+#[derive(Serialize)]
+struct Player<'a> {
+  id: u8,
+  name: &'a str,
+  race: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ReplayEntry<'a> {
+  Players(Vec<Player<'a>>),
+  Winner(u8),
+  GameLength(u16),
+  // Map(&'a DecoderResult<'a>), // &str
+  // PlayedAt(&'a DecoderResult<'a>), // u32
+  Map(&'a str),
+  PlayedAt(u32),
+  SummaryStats(HashMap<u8, HashMap<&'a str, SummaryStat>>),
+  Metadata(&'a str),
+}
+type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
+
+#[derive(Serialize)]
+struct SerializedReplays<'a> {
+  #[serde(borrow)]
+  replays: Vec<ReplaySummary<'a>>,
+}
+
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/"); // /ASUS ROG/Playoffs/3 - Ro2/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/ASUS ROG/Playoffs/3 - Ro2/");
   let mut replays: Vec<Replay> = vec![];
   visit_dirs(&mut replays, replay_dir).unwrap();
 
   let num_replays = replays.len();
   println!("visited {:?} files in {:.2?}", num_replays, now.elapsed());
+
+  let replay_summaries: Vec<ReplaySummary> = vec![];
+  let mut result = SerializedReplays {
+    replays: replay_summaries,
+  };
 
   'replay: for mut replay in replays {
     let parsed = replay.parse();
@@ -57,13 +100,13 @@ fn main() {
     // println!("player_info {:?}", parsed.player_info);
 
     let mut player_id: u8 = 0;
-    let mut workers_active: [u32; 2] = [0, 0];
+    let mut workers_active: [u8; 2] = [0, 0];
 
-    let mut minerals_produced: [u32; 2] = [0, 0];
-    let mut minerals_lost: [u32; 2] = [0, 0];
+    let mut minerals_collected: [u16; 2] = [0, 0];
+    let mut minerals_lost: [u16; 2] = [0, 0];
 
-    let mut gas_produced: [u32; 2] = [0, 0];
-    let mut gas_lost: [u32; 2] = [0, 0];
+    let mut gas_collected: [u16; 2] = [0, 0];
+    let mut gas_lost: [u16; 2] = [0, 0];
 
     let mut collection_rate: Vec<Vec<(u16, u16)>> = vec![vec![], vec![]];
     let mut unspent_resources: Vec<Vec<(u16, u16)>> = vec![vec![], vec![]];
@@ -90,10 +133,10 @@ fn main() {
 
             let player_index = (player_id - 1) as usize;
 
-            let mut event_minerals_produced: i64 = 0;
+            let mut event_minerals_collected: i64 = 0;
             let mut event_minerals_lost: i64 = 0;
 
-            let mut event_gas_produced: i64 = 0;
+            let mut event_gas_collected: i64 = 0;
             let mut event_gas_lost: i64 = 0;
 
             let mut event_minerals_collection_rate: u16 = 0;
@@ -110,7 +153,7 @@ fn main() {
             for (key, value) in entries {
               match *key {
                 "m_scoreValueWorkersActiveCount" => if let DecoderResult::Value(workers) = value {
-                  workers_active[player_index] = *workers as u32
+                  workers_active[player_index] = *workers as u8;
                 },
                 "m_scoreValueMineralsCollectionRate" => if let DecoderResult::Value(minerals) = value {
                   event_minerals_collection_rate = *minerals as u16;
@@ -120,23 +163,23 @@ fn main() {
                 },
                 "m_scoreValueMineralsCurrent" => if let DecoderResult::Value(minerals) = value {
                   event_minerals_unspent_resources = *minerals as u16;
-                  event_minerals_produced += minerals;
+                  event_minerals_collected += minerals;
                 },
                 "m_scoreValueVespeneCurrent" => if let DecoderResult::Value(gas) = value {
                   event_gas_unspent_resources = *gas as u16;
-                  event_gas_produced += gas;
+                  event_gas_collected += gas;
                 },
                 "m_scoreValueMineralsLostArmy" |
                 "m_scoreValueMineralsLostEconomy" |
                 "m_scoreValueMineralsLostTechnology" => if let DecoderResult::Value(minerals) = value {
                   event_minerals_lost += minerals.abs();
-                  event_minerals_produced += minerals;
+                  event_minerals_collected += minerals;
                 }
                 "m_scoreValueVespeneLostArmy" |
                 "m_scoreValueVespeneLostEconomy" |
                 "m_scoreValueVespeneLostTechnology" => if let DecoderResult::Value(gas) = value {
                   event_gas_lost += gas.abs();
-                  event_gas_produced += gas;
+                  event_gas_collected += gas;
                 }
                 "m_scoreValueMineralsUsedInProgressArmy" |
                 "m_scoreValueMineralsUsedInProgressEconomy" |
@@ -144,7 +187,7 @@ fn main() {
                 "m_scoreValueMineralsUsedCurrentArmy" |
                 "m_scoreValueMineralsUsedCurrentEconomy" |
                 "m_scoreValueMineralsUsedCurrentTechnology" => if let DecoderResult::Value(minerals) = value {
-                  event_minerals_produced += minerals;
+                  event_minerals_collected += minerals;
                 },
                 "m_scoreValueVespeneUsedInProgressArmy" |
                 "m_scoreValueVespeneUsedInProgressEconomy" |
@@ -152,17 +195,17 @@ fn main() {
                 "m_scoreValueVespeneUsedCurrentArmy" |
                 "m_scoreValueVespeneUsedCurrentEconomy" |
                 "m_scoreValueVespeneUsedCurrentTechnology" => if let DecoderResult::Value(gas) = value {
-                  event_gas_produced += gas;
+                  event_gas_collected += gas;
                 },
                 _other => continue,
               }
             }
 
-            minerals_produced[player_index] = event_minerals_produced as u32;
-            minerals_lost[player_index] = event_minerals_lost as u32;
+            minerals_collected[player_index] = event_minerals_collected as u16;
+            minerals_lost[player_index] = event_minerals_lost as u16;
 
-            gas_produced[player_index] = event_gas_produced as u32;
-            gas_lost[player_index] = event_gas_lost as u32;
+            gas_collected[player_index] = event_gas_collected as u16;
+            gas_lost[player_index] = event_gas_lost as u16;
 
             collection_rate[player_index].push((event_minerals_collection_rate, event_gas_collection_rate));
             unspent_resources[player_index].push((event_minerals_unspent_resources, event_gas_unspent_resources));
@@ -177,8 +220,17 @@ fn main() {
     println!("current workers active for player 1 {:?}", workers_active[0]);
     println!("current workers active for player 2 {:?}", workers_active[1]);
 
-    println!("resources collected player 1 {:?} / {:?}", minerals_produced[0], gas_produced[0]);
-    println!("resources collected player 2 {:?} / {:?}", minerals_produced[1], gas_produced[1]);
+    let resources_collected: [(u16, u16); 2] = [
+      (minerals_collected[0], gas_collected[0]),
+      (minerals_collected[1], gas_collected[1]),
+    ];
+    let resources_lost: [(u16, u16); 2] = [
+      (minerals_lost[0], gas_lost[0]),
+      (minerals_lost[1], gas_lost[1]),
+    ];
+
+    println!("resources collected player 1 {:?} / {:?}", minerals_collected[0], gas_collected[0]);
+    println!("resources collected player 2 {:?} / {:?}", minerals_collected[1], gas_collected[1]);
 
     println!("resources lost player 1 {:?} / {:?}", minerals_lost[0], gas_lost[0]);
     println!("resources lost player 2 {:?} / {:?}", minerals_lost[1], gas_lost[1]);
@@ -214,7 +266,60 @@ fn main() {
     }
     println!("avg unspent resources rate player 1 {:?} / {:?}", avg_unspent_resources[0].0, avg_unspent_resources[0].1);
     println!("avg unspent resources rate player 2 {:?} / {:?}", avg_unspent_resources[1].0, avg_unspent_resources[1].1);
+
+    let mut summary_stats = HashMap::new();
+    for player_index in 0..2 {
+      let player_summary_stats = HashMap::from([
+        ("avg_collection_rate", SummaryStat::ResourceValues(avg_unspent_resources[player_index])),
+        ("resources_collected", SummaryStat::ResourceValues(resources_collected[player_index])),
+        ("resources_lost", SummaryStat::ResourceValues(resources_lost[player_index])),
+        ("avg_unspent_resources", SummaryStat::ResourceValues(avg_unspent_resources[player_index])),
+        ("workers_produced", SummaryStat::Value(workers_active[player_index] as u16)),
+        ("workers_lost", SummaryStat::Value(0)),
+      ]);
+      summary_stats.insert((player_index + 1) as u8, player_summary_stats);
+    }
+
+    let parsed_metadata: replay::Metadata = serde_json::from_str(&parsed.metadata).unwrap();
+
+    let players = vec![];
+    let winner = parsed_metadata.Players
+      .iter()
+      .find(|player| player.Result == "Win")
+      .unwrap().PlayerID;
+    let game_length = parsed_metadata.Duration;
+    // let map = &parsed.player_info
+    //   .iter()
+    //   .find(|(key, _)| *key == "m_title")
+    //   .unwrap().1;
+    // let played_at = &parsed.player_info
+    //   .iter()
+    //   .find(|(key, _)| *key == "m_timeUTC")
+    //   .unwrap().1;
+
+    // let players = vec![];
+    // let winner = 1;
+    // let game_length = 0;
+    let map = "";
+    let played_at = 0;
+
+    let replay_summary: ReplaySummary = HashMap::from([
+      ("players", ReplayEntry::Players(players)),
+      ("winner", ReplayEntry::Winner(winner)),
+      ("game_length", ReplayEntry::GameLength(game_length)),
+      ("map", ReplayEntry::Map(map)),
+      ("played_at", ReplayEntry::PlayedAt(played_at)),
+      ("summary_stats", ReplayEntry::SummaryStats(summary_stats)),
+      ("metadata", ReplayEntry::Metadata("")),
+    ]);
+
+    result.replays.push(replay_summary);
   }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
+
+  let output = File::create("replays.json").unwrap();
+  serde_json::to_writer(&output, &result);
+
+  println!("replays serialized in {:?}", now.elapsed());
 }

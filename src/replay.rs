@@ -1,6 +1,10 @@
-use crate::{mpq::MPQArchive, protocol::Protocol, decoders::DecoderResult};
+use crate::decoders::{DecoderResult, EventEntry};
+use crate::mpq::MPQArchive;
+use crate::protocol::Protocol;
 
-use std::{str::from_utf8, path::PathBuf};
+use serde::Deserialize;
+
+use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Debug)]
@@ -16,10 +20,32 @@ impl<'a> Event<'a> {
   }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Player<'a> {
+  pub PlayerID: u8,
+  pub APM: f32,
+  pub Result: &'a str,
+  pub SelectedRace: &'a str,
+  pub AssignedRace: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Metadata<'a> {
+  pub Title: &'a str,
+  pub GameVersion: &'a str,
+  pub DataBuild: &'a str,
+  pub DataVersion: &'a str,
+  pub BaseBuild: &'a str,
+  pub Duration: u16,
+  pub IsNotAvailable: bool,
+  pub Players: Vec<Player<'a>>,
+}
+
 #[derive(Debug)]
 pub struct Parsed<'a> {
-  pub player_info: DecoderResult<'a>,
+  pub player_info: Vec<EventEntry<'a>>,
   pub tracker_events: Vec<Event<'a>>,
+  pub metadata: String,
 }
 
 pub struct Replay<'a> {
@@ -63,7 +89,7 @@ impl<'a> Replay<'a> {
     // println!("read details {:.2?}", now.elapsed());
 
     let raw_metadata = self.archive.read_file("replay.gamemetadata.json").unwrap();
-    let metadata = from_utf8(&raw_metadata).unwrap();
+    let metadata = String::from_utf8(raw_metadata.clone()).unwrap();
     // println!("read metadata {:.2?}", now.elapsed());
 
     let details = self.archive.read_file("replay.details").unwrap();
@@ -75,7 +101,11 @@ impl<'a> Replay<'a> {
     let game_events = self.protocol.decode_replay_game_events(game_info);
     // println!("decoding replay game events {:.2?}", now.elapsed());
 
-    self.parsed = Some(Parsed{ player_info, tracker_events });
+    self.parsed = Some(Parsed {
+      player_info,
+      tracker_events,
+      metadata,
+    });
 
     println!("parsed in {:.2?}", now.elapsed());
 

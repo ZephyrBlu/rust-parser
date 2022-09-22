@@ -1,9 +1,12 @@
 use crate::protocol::Int;
 use crate::protocol::ProtocolTypeInfo;
 use crate::protocol::Struct;
+
 use std::cmp::min;
 use std::collections::HashMap;
 use std::str;
+
+use serde::Serialize;
 
 pub struct BitPackedBuffer {
   data: Vec<u8>,
@@ -102,7 +105,9 @@ impl BitPackedBuffer {
   }
 }
 
-#[derive(Clone, Debug)]
+pub type EventEntry<'a> =  (&'a str, DecoderResult<'a>);
+
+#[derive(Clone, Debug, Serialize)]
 pub enum DecoderResult<'a> {
   Name(&'a &'a str),
   Value(i64),
@@ -111,7 +116,7 @@ pub enum DecoderResult<'a> {
   DataFragment(u32),
   Pair((u8, i8)),
   Bool(bool),
-  Struct(Vec<(&'a str, DecoderResult<'a>)>),
+  Struct(Vec<EventEntry<'a>>),
   Null,
 }
 

@@ -1,7 +1,11 @@
-use crate::decoders::BitPackedDecoder;
-use crate::decoders::Decoder;
-use crate::decoders::DecoderResult;
-use crate::decoders::VersionedDecoder;
+use crate::decoders::{
+  Decoder,
+  DecoderResult,
+  BitPackedDecoder,
+  VersionedDecoder,
+  EventEntry,
+};
+
 use crate::replay::Event;
 use std::collections::HashMap;
 
@@ -581,9 +585,14 @@ impl Protocol {
     }
   }
 
-  pub fn decode_replay_details(&self, contents: Vec<u8>) -> DecoderResult {
+  pub fn decode_replay_details(&self, contents: Vec<u8>) -> Vec<EventEntry> {
     let mut decoder = VersionedDecoder::new(contents, &self.typeinfos);
-    decoder.instance(&self.typeinfos, &GAME_DETAILS_TYPEID)
+    let details = decoder.instance(&self.typeinfos, &GAME_DETAILS_TYPEID);
+
+    match details {
+      DecoderResult::Struct(values) => values,
+      _other => panic!("Found DecoderResult::{:?}", _other),
+    }
   }
 
   pub fn decode_replay_tracker_events(&self, contents: Vec<u8>) -> Vec<Event> {
