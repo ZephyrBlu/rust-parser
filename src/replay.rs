@@ -37,7 +37,7 @@ pub struct Metadata<'a> {
   pub DataVersion: &'a str,
   pub BaseBuild: &'a str,
   pub Duration: u16,
-  pub IsNotAvailable: bool,
+  // pub IsNotAvailable: bool,
   pub Players: Vec<PlayerMetadata<'a>>,
 }
 
@@ -46,6 +46,7 @@ pub struct Parsed<'a> {
   pub player_info: Vec<EventEntry<'a>>,
   pub tracker_events: Vec<Event<'a>>,
   pub metadata: String,
+  pub tags: String,
 }
 
 pub struct Replay<'a> {
@@ -53,16 +54,18 @@ pub struct Replay<'a> {
   pub archive: MPQArchive,
   pub protocol: Protocol,
   pub parsed: Option<Parsed<'a>>,
+  pub tags: Vec<&'a str>,
 }
 
 impl<'a> Replay<'a> {
-  pub fn new(file_path: PathBuf) -> Replay<'a> {
+  pub fn new(file_path: PathBuf, tags: Vec<&'a str>) -> Replay<'a> {
     let path_str = file_path.to_str().unwrap();
     Replay {
       file_path: path_str.to_string(),
       archive: MPQArchive::new(path_str),
       protocol: Protocol::new(),
       parsed: None,
+      tags,
     }
   }
 
@@ -105,6 +108,7 @@ impl<'a> Replay<'a> {
       player_info,
       tracker_events,
       metadata,
+      tags: self.tags.join(", "),
     });
 
     println!("parsed in {:.2?}", now.elapsed());

@@ -2,6 +2,7 @@ mod decoders;
 mod protocol;
 mod mpq;
 mod replay;
+mod index;
 
 use crate::replay::Replay;
 use crate::decoders::DecoderResult;
@@ -17,19 +18,72 @@ use std::path::Path;
 // use bzip2_rs::RayonThreadPool;
 
 fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
+  const TOURNAMENTS: [&str; 6] = [
+    "ASUS ROG",
+    "DreamHack Masters",
+    "HomeStory Cup",
+    "IEM Katowice",
+    "StayAtHome Story Cup",
+    "TSL",
+  ];
+  const VALID_TAGS: [&str; 10] = [
+    "FINAL",
+    "SEMIFINAL",
+    "QUARTERFINAL",
+    "PLAYOFF",
+    "GROUP",
+    "RO32",
+    "RO16",
+    "RO8",
+    "RO4",
+    "RO2",
+  ];
+  let TAG_MAPPINGS: HashMap<&str, &str> = HashMap::from([
+    ("RO2", "Final"),
+    ("RO4", "Semifinal"),
+    ("RO8", "Quarterfinal"),
+    ("FINAL", "Final"),
+    ("SEMIFINAL", "Semifinal"),
+    ("QUARTERFINAL", "Quarterfinal"),
+    ("PLAYOFF", "Playoff"),
+    ("GROUP", "Group"),
+  ]);
+
   if dir.is_dir() {
     for entry in read_dir(dir)? {
       let entry = entry?;
       let path = entry.path();
       // let filename = entry.file_name();
-      if path.is_dir() {
+      if path.is_dir() && !path.to_str().unwrap().contains("PiG") {
         visit_dirs(replays, &entry.path())?;
       }
 
       match path.extension() {
         Some(extension) => {
           if extension == "SC2Replay" {
-            replays.push(Replay::new(path));
+            let current_path = path.to_str().unwrap();
+            let mut tags = vec![];
+
+            for tag in TOURNAMENTS {
+              if current_path.contains(tag) {
+                tags.push(tag);
+              }
+            }
+
+            for tag in VALID_TAGS {
+              if current_path.to_uppercase().contains(tag) {
+                let mut mapped_tag = tag;
+                if TAG_MAPPINGS.contains_key(mapped_tag) {
+                  mapped_tag = match TAG_MAPPINGS.get(tag) {
+                    Some(value) => value,
+                    None => tag,
+                  }
+                }
+                tags.push(mapped_tag);
+              }
+            }
+
+            replays.push(Replay::new(path, tags));
           }
         },
         None => continue,
@@ -67,9 +121,9 @@ enum ReplayEntry<'a> {
   // Map(&'a DecoderResult<'a>), // &str
   // PlayedAt(&'a DecoderResult<'a>), // u32
   Map(String),
-  PlayedAt(u32),
+  PlayedAt(u64),
   SummaryStats(HashMap<u8, HashMap<&'a str, SummaryStat>>),
-  Metadata(&'a str),
+  Metadata(String),
 }
 type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
 
@@ -82,7 +136,7 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
   let mut replays: Vec<Replay> = vec![];
   visit_dirs(&mut replays, replay_dir).unwrap();
 
@@ -145,7 +199,7 @@ fn main() {
             let mut event_minerals_unspent_resources: u16 = 0;
             let mut event_gas_unspent_resources: u16 = 0;
 
-            // only support 2 player games
+            // don't support more than 2 players
             if player_index > 1 {
               continue 'replay;
             }
@@ -280,6 +334,8 @@ fn main() {
       summary_stats.insert((player_index + 1) as u8, player_summary_stats);
     }
 
+    println!("player info {:?}", &parsed.player_info);
+
     let parsed_metadata: replay::Metadata = serde_json::from_str(&parsed.metadata).unwrap();
 
     let (_, player_list) = &parsed.player_info
@@ -291,6 +347,12 @@ fn main() {
     match player_list {
       DecoderResult::Array(values) => {
         // TODO: enumerated id is incorrect for P1 and P2 in games
+
+        // don't support 1 player or 3+ player games
+        if values.len() != 2 {
+          continue 'replay;
+        }
+
         for (id, player) in values.iter().enumerate() {
           match player {
             DecoderResult::Struct(player_values) => {
@@ -325,10 +387,12 @@ fn main() {
       _other => panic!("Found DecoderResult::{:?}", _other)
     }
 
-    let winner = parsed_metadata.Players
+    let winner = match parsed_metadata.Players
       .iter()
-      .find(|player| player.Result == "Win")
-      .unwrap().PlayerID;
+      .find(|player| player.Result == "Win") {
+        Some(player) => player.PlayerID,
+        None => continue 'replay,
+      };
     let game_length = parsed_metadata.Duration;
 
     let raw_map = &parsed.player_info
@@ -347,8 +411,11 @@ fn main() {
     let mut played_at = 0;
     if let DecoderResult::Value(value) = raw_played_at {
       // TODO: this truncation is not working properly
-      played_at = value.clone() as u32;
+      played_at = value.clone() as u64;
     }
+    // game records time in window epoch for some reason
+    // https://en.wikipedia.org/wiki/Epoch_(computing)
+    played_at = (played_at / 10000000) - 11644473600;
 
     // let map = "CHANGE MAP NAME";
     // let played_at = 0;
@@ -360,7 +427,7 @@ fn main() {
       ("map", ReplayEntry::Map(map)),
       ("played_at", ReplayEntry::PlayedAt(played_at)),
       ("summary_stats", ReplayEntry::SummaryStats(summary_stats)),
-      ("metadata", ReplayEntry::Metadata("")),
+      ("metadata", ReplayEntry::Metadata(parsed.tags.clone())),
     ]);
 
     result.replays.push(replay_summary);

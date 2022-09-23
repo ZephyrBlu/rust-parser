@@ -145,7 +145,6 @@ pub trait Decoder<'decode> {
       ProtocolTypeInfo::FourCC => self._fourcc(),
       ProtocolTypeInfo::Choice(bounds, fields) => self._choice(bounds, fields),
       ProtocolTypeInfo::Struct(fields) => self._struct(fields),
-      _other => panic!("Unknown typeinfo {:?}", _other),
     }
   }
 
