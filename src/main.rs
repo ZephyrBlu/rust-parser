@@ -6,11 +6,13 @@ mod index;
 
 use crate::replay::Replay;
 use crate::decoders::DecoderResult;
+use crate::index::Index;
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::read_dir;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::Result;
 
 use std::path::Path;
@@ -115,6 +117,7 @@ struct Player {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum ReplayEntry<'a> {
+  Id(u32),
   Players(Vec<Player>),
   Winner(u8),
   GameLength(u16),
@@ -136,7 +139,7 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   visit_dirs(&mut replays, replay_dir).unwrap();
 
@@ -148,8 +151,27 @@ fn main() {
     replays: replay_summaries,
   };
 
-  'replay: for mut replay in replays {
-    let parsed = replay.parse();
+  let mut race_index = Index::new();
+  let mut player_index = Index::new();
+
+  let RACE_MAPPING = HashMap::from([
+    ("저그", "Zerg"),
+    ("异虫", "Zerg"),
+    ("蟲族", "Zerg"),
+    ("테란", "Terran"),
+    ("人類", "Terran"),
+    ("人类", "Terran"),
+    ("Terraner", "Terran"),
+    ("Терраны", "Terran"),
+    ("프로토스", "Protoss"),
+    ("神族", "Protoss"),
+    ("Protosi", "Protoss"),
+    ("星灵", "Protoss"),
+    ("Протоссы", "Protoss"),
+  ]);
+
+  'replay: for (replay_id, replay) in replays.iter_mut().enumerate() {
+    let parsed = replay.parse(replay_id as u32);
 
     // println!("player_info {:?}", parsed.player_info);
 
@@ -374,6 +396,12 @@ fn main() {
                 name = value.clone();
               }
 
+              if let Some(value) = RACE_MAPPING.get(name.as_str()) {
+                name = value.to_string();
+              }
+
+              race_index.add(race.clone(), replay_id as u32);
+              player_index.add(name.clone(), replay_id as u32);
               players.push(Player {
                 id: (id + 1) as u8,
                 race,
@@ -421,6 +449,7 @@ fn main() {
     // let played_at = 0;
 
     let replay_summary: ReplaySummary = HashMap::from([
+      ("id", ReplayEntry::Id(parsed.id)),
       ("players", ReplayEntry::Players(players)),
       ("winner", ReplayEntry::Winner(winner)),
       ("game_length", ReplayEntry::GameLength(game_length)),
@@ -435,8 +464,16 @@ fn main() {
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
-  let output = File::create("../sc2.gg/src/assets/replays.json").unwrap();
-  serde_json::to_writer(&output, &result);
+  let replay_output = File::create("../sc2.gg/src/assets/replays.json").unwrap();
+  serde_json::to_writer(&replay_output, &result);
+
+  let indexes = HashMap::from([
+    ("race", race_index),
+    ("player", player_index),
+  ]);
+
+  let index_output = File::create("../sc2.gg/src/assets/indexes.json").unwrap();
+  serde_json::to_writer(&index_output, &indexes);
 
   println!("replays serialized in {:?}", now.elapsed());
 }

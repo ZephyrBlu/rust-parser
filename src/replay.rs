@@ -43,6 +43,7 @@ pub struct Metadata<'a> {
 
 #[derive(Debug)]
 pub struct Parsed<'a> {
+  pub id: u32,
   pub player_info: Vec<EventEntry<'a>>,
   pub tracker_events: Vec<Event<'a>>,
   pub metadata: String,
@@ -69,7 +70,7 @@ impl<'a> Replay<'a> {
     }
   }
 
-  pub fn parse (&'a mut self) -> &Parsed<'a> {
+  pub fn parse (&'a mut self, id: u32) -> &Parsed<'a> {
     println!("parsing replay {:?}", self.file_path);
 
     let now = Instant::now();
@@ -105,6 +106,7 @@ impl<'a> Replay<'a> {
     // println!("decoding replay game events {:.2?}", now.elapsed());
 
     self.parsed = Some(Parsed {
+      id,
       player_info,
       tracker_events,
       metadata,
