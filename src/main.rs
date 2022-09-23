@@ -12,7 +12,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::read_dir;
 use std::fs::File;
-use std::hash::Hash;
 use std::io::Result;
 
 use std::path::Path;
@@ -136,6 +135,7 @@ struct SerializedReplays<'a> {
   replays: Vec<ReplaySummary<'a>>,
 }
 
+// TODO: filter duplicate replays with content hash
 fn main() {
   let now = Instant::now();
 
@@ -153,6 +153,8 @@ fn main() {
 
   let mut race_index = Index::new();
   let mut player_index = Index::new();
+  let mut metadata_index = Index::new();
+  let mut map_index = Index::new();
 
   let RACE_MAPPING = HashMap::from([
     ("저그", "Zerg"),
@@ -170,7 +172,8 @@ fn main() {
     ("Протоссы", "Protoss"),
   ]);
 
-  'replay: for (replay_id, replay) in replays.iter_mut().enumerate() {
+  let mut replay_id = 0;
+  'replay: for mut replay in replays {
     let parsed = replay.parse(replay_id as u32);
 
     // println!("player_info {:?}", parsed.player_info);
@@ -356,9 +359,39 @@ fn main() {
       summary_stats.insert((player_index + 1) as u8, player_summary_stats);
     }
 
-    println!("player info {:?}", &parsed.player_info);
+    // println!("player info {:?}", &parsed.player_info);
 
     let parsed_metadata: replay::Metadata = serde_json::from_str(&parsed.metadata).unwrap();
+
+    let winner = match parsed_metadata.Players
+    .iter()
+    .find(|player| player.Result == "Win") {
+      Some(player) => player.PlayerID,
+      None => continue 'replay,
+    };
+    let game_length = parsed_metadata.Duration;
+
+    let raw_map = &parsed.player_info
+      .iter()
+      .find(|(field, _)| *field == "m_title")
+      .unwrap().1;
+    let mut map = String::new();
+    if let DecoderResult::Blob(value) = raw_map {
+      map = value.clone();
+    }
+
+    let raw_played_at = &parsed.player_info
+      .iter()
+      .find(|(field, _)| *field == "m_timeUTC")
+      .unwrap().1;
+    let mut played_at = 0;
+    if let DecoderResult::Value(value) = raw_played_at {
+      // TODO: this truncation is not working properly
+      played_at = value.clone() as u64;
+    }
+    // game records time in window epoch for some reason
+    // https://en.wikipedia.org/wiki/Epoch_(computing)
+    played_at = (played_at / 10000000) - 11644473600;
 
     let (_, player_list) = &parsed.player_info
       .iter()
@@ -415,38 +448,10 @@ fn main() {
       _other => panic!("Found DecoderResult::{:?}", _other)
     }
 
-    let winner = match parsed_metadata.Players
-      .iter()
-      .find(|player| player.Result == "Win") {
-        Some(player) => player.PlayerID,
-        None => continue 'replay,
-      };
-    let game_length = parsed_metadata.Duration;
-
-    let raw_map = &parsed.player_info
-      .iter()
-      .find(|(field, _)| *field == "m_title")
-      .unwrap().1;
-    let mut map = String::new();
-    if let DecoderResult::Blob(value) = raw_map {
-      map = value.clone();
+    map_index.add(map.clone(), replay_id);
+    for t in parsed.tags.split(", ") {
+      metadata_index.add(t.to_string(), replay_id);
     }
-
-    let raw_played_at = &parsed.player_info
-      .iter()
-      .find(|(field, _)| *field == "m_timeUTC")
-      .unwrap().1;
-    let mut played_at = 0;
-    if let DecoderResult::Value(value) = raw_played_at {
-      // TODO: this truncation is not working properly
-      played_at = value.clone() as u64;
-    }
-    // game records time in window epoch for some reason
-    // https://en.wikipedia.org/wiki/Epoch_(computing)
-    played_at = (played_at / 10000000) - 11644473600;
-
-    // let map = "CHANGE MAP NAME";
-    // let played_at = 0;
 
     let replay_summary: ReplaySummary = HashMap::from([
       ("id", ReplayEntry::Id(parsed.id)),
@@ -460,6 +465,7 @@ fn main() {
     ]);
 
     result.replays.push(replay_summary);
+    replay_id += 1;
   }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
@@ -470,6 +476,8 @@ fn main() {
   let indexes = HashMap::from([
     ("race", race_index),
     ("player", player_index),
+    ("metadata", metadata_index),
+    ("map", map_index),
   ]);
 
   let index_output = File::create("../sc2.gg/src/assets/indexes.json").unwrap();
