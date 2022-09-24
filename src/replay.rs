@@ -43,7 +43,6 @@ pub struct Metadata<'a> {
 
 #[derive(Debug)]
 pub struct Parsed<'a> {
-  pub id: u32,
   pub player_info: Vec<EventEntry<'a>>,
   pub tracker_events: Vec<Event<'a>>,
   pub metadata: String,
@@ -52,6 +51,7 @@ pub struct Parsed<'a> {
 
 pub struct Replay<'a> {
   pub file_path: String,
+  pub content_hash: String,
   pub archive: MPQArchive,
   pub protocol: Protocol,
   pub parsed: Option<Parsed<'a>>,
@@ -59,10 +59,11 @@ pub struct Replay<'a> {
 }
 
 impl<'a> Replay<'a> {
-  pub fn new(file_path: PathBuf, tags: Vec<&'a str>) -> Replay<'a> {
+  pub fn new(file_path: PathBuf, content_hash: String, tags: Vec<&'a str>) -> Replay<'a> {
     let path_str = file_path.to_str().unwrap();
     Replay {
       file_path: path_str.to_string(),
+      content_hash,
       archive: MPQArchive::new(path_str),
       protocol: Protocol::new(),
       parsed: None,
@@ -70,7 +71,7 @@ impl<'a> Replay<'a> {
     }
   }
 
-  pub fn parse (&'a mut self, id: u32) -> &Parsed<'a> {
+  pub fn parse (&'a mut self) -> &Parsed<'a> {
     println!("parsing replay {:?}", self.file_path);
 
     let now = Instant::now();
@@ -106,7 +107,6 @@ impl<'a> Replay<'a> {
     // println!("decoding replay game events {:.2?}", now.elapsed());
 
     self.parsed = Some(Parsed {
-      id,
       player_info,
       tracker_events,
       metadata,
