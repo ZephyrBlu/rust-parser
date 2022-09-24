@@ -82,8 +82,13 @@ fn main() {
   let mut map_index = Index::new();
 
   let mut replay_id = 0;
-    for mut replay in replays {
+  for mut replay in replays {
     let content_hash = replay.content_hash.clone();
+    // don't include replays we've seen before
+    if seen_replays.contains(&content_hash) {
+      continue;
+    }
+
     let parsed = replay.parse();
 
     let mut replay_summary = match EventParser::parse(parsed) {
@@ -97,17 +102,19 @@ fn main() {
     replay_summary.insert("id", ReplayEntry::Id(replay_id));
     replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
-    // map_index.add(map.clone(), replay_id);
+    if let ReplayEntry::Map(map) = replay_summary.get("map").unwrap() {
+      map_index.add(map.clone(), replay_id);
+    }
+
     for t in parsed.tags.split(", ") {
       metadata_index.add(t.to_string(), replay_id);
     }
 
-    // race_index.add(race.clone(), replay_id as u32);
-    // player_index.add(name.clone(), replay_id as u32);
-
-    // don't include replays we've seen before
-    if seen_replays.contains(&content_hash) {
-      continue;
+    if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
+      for player in players {
+        race_index.add(player.race.clone(), replay_id as u32);
+        player_index.add(player.name.clone(), replay_id as u32);
+      }
     }
 
     result.replays.push(replay_summary);
