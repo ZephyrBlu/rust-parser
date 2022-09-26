@@ -3,13 +3,15 @@ mod protocol;
 mod mpq;
 mod replay;
 mod index;
-mod event_parser;
+mod events;
 mod utils;
+mod game;
+mod parser;
 
+use crate::parser::ReplayParser;
 use crate::replay::Replay;
 use crate::index::Index;
 use crate::utils::visit_dirs;
-use crate::event_parser::EventParser;
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -45,13 +47,12 @@ pub enum ReplayEntry<'a> {
   Players(Vec<Player>),
   Winner(u8),
   GameLength(u16),
-  // Map(&'a DecoderResult<'a>), // &str
-  // PlayedAt(&'a DecoderResult<'a>), // u32
   Map(String),
   PlayedAt(u64),
   SummaryStats(HashMap<u8, HashMap<&'a str, SummaryStat>>),
   Metadata(String),
 }
+
 type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
 
 #[derive(Serialize)]
@@ -82,23 +83,21 @@ fn main() {
   let mut map_index = Index::new();
 
   let mut replay_id = 0;
-  for mut replay in replays {
+  let replay_parser = ReplayParser::new();
+  for replay in replays {
     let content_hash = replay.content_hash.clone();
     // don't include replays we've seen before
     if seen_replays.contains(&content_hash) {
       continue;
     }
 
-    let parsed = replay.parse();
-
-    let mut replay_summary = match EventParser::parse(parsed) {
+    let mut replay_summary = match replay_parser.parse_replay(replay.parsed) {
       Ok(summary) => summary,
       Err(e) => {
-        println!("replay parsing failed: {:?}\n", e);
+        println!("Error parsing replay: {e}");
         continue;
       },
     };
-
     replay_summary.insert("id", ReplayEntry::Id(replay_id));
     replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
@@ -106,8 +105,10 @@ fn main() {
       map_index.add(map.clone(), replay_id);
     }
 
-    for t in parsed.tags.split(", ") {
-      metadata_index.add(t.to_string(), replay_id);
+    if let ReplayEntry::Metadata(metadata) = replay_summary.get("metadata").unwrap() {
+      for tag in metadata.split(", ") {
+        metadata_index.add(tag.to_string(), replay_id);
+      }
     }
 
     if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {

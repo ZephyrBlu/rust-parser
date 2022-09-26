@@ -249,10 +249,10 @@ const GAME_DETAILS_TYPEID: u8 = 40;
 //  The typeid of NNet.Replay.SInitData (the type used to store the inital lobby).
 const REPLAY_INITDATA_TYPEID: u8 = 73;
 
-fn instantiate_event_types() -> (
-  HashMap<i64, (u8, &'static str)>,
-  HashMap<i64, (u8, &'static str)>,
-  HashMap<i64, (u8, &'static str)>,
+fn instantiate_event_types<'a>() -> (
+  HashMap<i64, (u8, &'a str)>,
+  HashMap<i64, (u8, &'a str)>,
+  HashMap<i64, (u8, &'a str)>,
 ) {
   //  Map from protocol NNet.Game.*Event eventid to (typeid, name)
   let game_event_types: HashMap<i64, (u8, &str)> = HashMap::from([
@@ -534,7 +534,7 @@ fn handle_struct(input: &str) -> ProtocolTypeInfo {
   ProtocolTypeInfo::Struct(structs)
 }
 
-fn parse_typeinfos() -> Vec<ProtocolTypeInfo<'static>> {
+fn parse_typeinfos<'a>() -> Vec<ProtocolTypeInfo<'a>> {
   let mut typeinfos: Vec<ProtocolTypeInfo> = vec![];
   for protocol_type in RAW_TYPEINFOS.lines() {
     let match_outer_structure =
@@ -564,15 +564,15 @@ fn parse_typeinfos() -> Vec<ProtocolTypeInfo<'static>> {
   typeinfos
 }
 
-pub struct Protocol {
-  typeinfos: Vec<ProtocolTypeInfo<'static>>,
-  game_event_types: HashMap<i64, (u8, &'static str)>,
-  tracker_event_types: HashMap<i64, (u8, &'static str)>,
-  message_event_types: HashMap<i64, (u8, &'static str)>,
+pub struct Protocol<'a> {
+  typeinfos: Vec<ProtocolTypeInfo<'a>>,
+  game_event_types: HashMap<i64, (u8, &'a str)>,
+  tracker_event_types: HashMap<i64, (u8, &'a str)>,
+  message_event_types: HashMap<i64, (u8, &'a str)>,
 }
 
-impl Protocol {
-  pub fn new() -> Protocol {
+impl<'a> Protocol<'a> {
+  pub fn new() -> Protocol<'a> {
     let typeinfos = parse_typeinfos();
     let (game_event_types, tracker_event_types, message_event_types) =
       instantiate_event_types();
@@ -617,7 +617,7 @@ impl Protocol {
 
       let event = match decoder.instance(&self.typeinfos, type_id) {
         DecoderResult::Struct(mut entries) => {
-          entries.push(("_event", DecoderResult::Name(typename)));
+          entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
           Event::new(entries)
         }
         _other => panic!("Only supports Structs"),
@@ -654,7 +654,7 @@ impl Protocol {
 
       let event = match decoder.instance(&self.typeinfos, type_id) {
         DecoderResult::Struct(mut entries) => {
-          entries.push(("_event", DecoderResult::Name(typename)));
+          entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
           Event::new(entries)
         }
         _other => panic!("Only supports Structs"),
