@@ -68,7 +68,8 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
+  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -132,7 +133,7 @@ fn main() {
       let matchup_prefix = races.join(",");
       for (p_id, player_build) in builds.iter().enumerate() {
         let build_prefix = format!("{}-{}__", races[p_id], matchup_prefix);
-        build_tokens.generate_tokens(player_build, build_prefix);  
+        build_tokens.generate_tokens(player_build, build_prefix);
 
         if player_build.len() <= 3 {
           println!("Build has less than 3 buildings: {:?}", player_build);
@@ -153,10 +154,47 @@ fn main() {
     replay_id += 1;
   }
 
-  // println!("Generated build tokens: {:?}", build_tokens.tokens);
-
+  let distribution_time = now.elapsed();
   build_tokens.generate_token_distributions();
-  println!("Generated token distributions: {:?}", build_tokens.probability);
+  println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
+
+  let token_path_time = now.elapsed();
+  for replay_summary in &result.replays {
+    let mut races = vec![];
+    if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
+      for player in players {
+        races.push(player.race.clone());
+      }
+    }
+
+    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+      let matchup_prefix = races.join(",");
+      for (p_id, player_build) in builds.iter().enumerate() {
+        if player_build.len() <= 3 {
+          println!("Build has less than 3 buildings: {:?}", player_build);
+          continue;
+        }
+
+        let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+        build_tokens.generate_token_paths(player_build, build_prefix);
+      }
+    }
+  }
+
+  let mut set = HashSet::new();
+  for path in &build_tokens.token_paths {
+    set.insert(path);
+  }
+  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
+  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
+
+  println!("cached token paths {:?}", build_tokens.cached_token_paths.len());
+  for (build, cached) in &build_tokens.cached_token_paths {
+    for c in cached {
+      // println!("cached: {:?}", c);
+    }
+    println!("build cached paths {:?} {:?}", build, cached.len());
+  }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
