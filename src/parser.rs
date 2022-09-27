@@ -187,6 +187,7 @@ impl<'a> ReplayParser<'a> {
 
     let replay_summary: ReplaySummary = HashMap::from([
       ("players", ReplayEntry::Players(players)),
+      ("builds", ReplayEntry::Builds(game.builds)),
       ("winner", ReplayEntry::Winner(winner)),
       ("game_length", ReplayEntry::GameLength(game_length)),
       ("map", ReplayEntry::Map(map)),

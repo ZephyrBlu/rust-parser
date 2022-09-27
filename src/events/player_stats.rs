@@ -8,7 +8,6 @@ impl PlayerStatsEvent {
   pub fn new(game: &mut Game, event: &Event) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
     for (field, value) in &event.entries {
-      // println!("event entry values {:?} {:?}", field, value);
       match field.as_str() {
         "m_playerId" => player_id = if let DecoderResult::Value(v) = value {
           *v as u8
@@ -16,8 +15,6 @@ impl PlayerStatsEvent {
           return Err("Player ID is not a value");
         },
         "m_stats" => if let DecoderResult::Struct(entries) = value {
-          // println!("stats values {:?}", event.entries);
-
           let player_index = (player_id - 1) as usize;
 
           let mut event_minerals_collected: i64 = 0;

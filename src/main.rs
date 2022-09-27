@@ -17,6 +17,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::Path;
+use std::cmp::min;
 // use bzip2_rs::ParallelDecoderReader;
 // use bzip2_rs::RayonThreadPool;
 
@@ -37,6 +38,7 @@ pub struct Player {
   id: u8,
   name: String,
   race: String,
+  // build: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -45,6 +47,7 @@ pub enum ReplayEntry<'a> {
   Id(u32),
   ContentHash(String),
   Players(Vec<Player>),
+  Builds(Vec<Vec<String>>),
   Winner(u8),
   GameLength(u16),
   Map(String),
@@ -81,6 +84,7 @@ fn main() {
   let mut player_index = Index::new();
   let mut metadata_index = Index::new();
   let mut map_index = Index::new();
+  let mut build_index = Index::new();
 
   let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
@@ -118,6 +122,23 @@ fn main() {
       }
     }
 
+    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+      for player_build in builds {
+        if player_build.len() <= 3 {
+          println!("Build has less than 3 buildings: {:?}", player_build);
+          continue;
+        }
+
+        println!("Full build: {:?}", player_build);
+        for i in 0..(player_build.len() - 2) {
+          let trigram = &player_build[i..(i + 3)];
+          println!("Generated trigram: {:?}", trigram);
+          build_index.add(trigram.join(","), replay_id as u32);
+        }
+        println!("\n");
+      }
+    }
+
     result.replays.push(replay_summary);
     seen_replays.insert(content_hash);
     replay_id += 1;
@@ -128,11 +149,19 @@ fn main() {
   let replay_output = File::create("../sc2.gg/src/assets/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &result);
 
+  let mut filtered_build_index = Index::new();
+  for (trigram, references) in build_index.entries {
+    if references.len() >= 10 {
+      filtered_build_index.entries.insert(trigram, references);
+    }
+  }
+
   let indexes = HashMap::from([
     ("race", race_index),
     ("player", player_index),
     ("metadata", metadata_index),
     ("map", map_index),
+    ("build", filtered_build_index),
   ]);
 
   let index_output = File::create("../sc2.gg/src/assets/indexes.json").unwrap();
