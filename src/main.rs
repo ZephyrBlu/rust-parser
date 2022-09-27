@@ -7,17 +7,18 @@ mod events;
 mod utils;
 mod game;
 mod parser;
+mod builds;
 
 use crate::parser::ReplayParser;
 use crate::replay::Replay;
 use crate::index::Index;
 use crate::utils::visit_dirs;
+use crate::builds::BuildTokens;
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::Path;
-use std::cmp::min;
 // use bzip2_rs::ParallelDecoderReader;
 // use bzip2_rs::RayonThreadPool;
 
@@ -67,7 +68,7 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -88,6 +89,9 @@ fn main() {
 
   let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
+
+  let mut build_tokens = BuildTokens::new();
+
   for replay in replays {
     let content_hash = replay.content_hash.clone();
     // don't include replays we've seen before
@@ -115,27 +119,32 @@ fn main() {
       }
     }
 
+    let mut races = vec![];
     if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
       for player in players {
+        races.push(player.race.clone());
         race_index.add(player.race.clone(), replay_id as u32);
         player_index.add(player.name.clone(), replay_id as u32);
       }
     }
 
     if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-      for player_build in builds {
+      let matchup_prefix = races.join(",");
+      for (p_id, player_build) in builds.iter().enumerate() {
+        let build_prefix = format!("{}-{}__", races[p_id], matchup_prefix);
+        build_tokens.generate_tokens(player_build, build_prefix);  
+
         if player_build.len() <= 3 {
           println!("Build has less than 3 buildings: {:?}", player_build);
           continue;
         }
 
-        println!("Full build: {:?}", player_build);
+        // println!("Full build: {:?}", player_build);
         for i in 0..(player_build.len() - 2) {
           let trigram = &player_build[i..(i + 3)];
-          println!("Generated trigram: {:?}", trigram);
+          // println!("Generated trigram: {:?}", trigram);
           build_index.add(trigram.join(","), replay_id as u32);
         }
-        println!("\n");
       }
     }
 
@@ -143,6 +152,11 @@ fn main() {
     seen_replays.insert(content_hash);
     replay_id += 1;
   }
+
+  // println!("Generated build tokens: {:?}", build_tokens.tokens);
+
+  build_tokens.generate_token_distributions();
+  println!("Generated token distributions: {:?}", build_tokens.probability);
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 

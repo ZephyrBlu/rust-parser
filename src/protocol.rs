@@ -604,6 +604,9 @@ impl<'a> Protocol<'a> {
       let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
 
       let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
+      if let DecoderResult::Value(v) = delta {
+        gameloop += v;
+      }
 
       let event_id = match decoder.instance(&self.typeinfos, &TRACKER_EVENTID_TYPEID) {
         DecoderResult::Value(value) => value,
@@ -617,6 +620,7 @@ impl<'a> Protocol<'a> {
 
       let event = match decoder.instance(&self.typeinfos, type_id) {
         DecoderResult::Struct(mut entries) => {
+          entries.push(("_gameloop".to_string(), DecoderResult::Value(gameloop)));
           entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
           Event::new(entries)
         }

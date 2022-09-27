@@ -159,6 +159,10 @@ impl<'a> ReplayParser<'a> {
                 race = value.clone();
               }
 
+              if let Some(value) = self.race_mappings.get(race.as_str()) {
+                race = value.to_string();
+              }
+
               let raw_name = &player_values
                 .iter()
                 .find(|(field, _)| *field == "m_name")
@@ -166,10 +170,6 @@ impl<'a> ReplayParser<'a> {
               let mut name = String::new();
               if let DecoderResult::Blob(value) = raw_name {
                 name = value.clone();
-              }
-
-              if let Some(value) = self.race_mappings.get(name.as_str()) {
-                name = value.to_string();
               }
 
               players.push(Player {

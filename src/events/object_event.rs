@@ -80,6 +80,12 @@ impl ObjectEvent {
         "m_unitTagRecycle" => if let DecoderResult::Value(recycle) = value{
           tag_recycle = *recycle as u32;
         },
+        "_gameloop" => if let DecoderResult::Value(gameloop) = value {
+          // ~7min, 22.4 gameloops per sec
+          if *gameloop > 9408 {
+            return Err("Gameloop is past 7min");
+          }
+        },
         _other => continue,
       }
     }
