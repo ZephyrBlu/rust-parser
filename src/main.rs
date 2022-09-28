@@ -103,7 +103,7 @@ fn main() {
     let mut replay_summary = match replay_parser.parse_replay(replay.parsed) {
       Ok(summary) => summary,
       Err(e) => {
-        println!("Error parsing replay: {e}");
+        // println!("Error parsing replay: {e}");
         continue;
       },
     };
@@ -121,22 +121,26 @@ fn main() {
     }
 
     let mut races = vec![];
+    let mut matchup = vec![];
     if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
       for player in players {
         races.push(player.race.clone());
+        matchup.push(player.race.clone());
+
         race_index.add(player.race.clone(), replay_id as u32);
         player_index.add(player.name.clone(), replay_id as u32);
       }
     }
+    matchup.sort();
 
     if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-      let matchup_prefix = races.join(",");
+      let matchup_prefix = matchup.join(",");
       for (p_id, player_build) in builds.iter().enumerate() {
-        let build_prefix = format!("{}-{}__", races[p_id], matchup_prefix);
-        build_tokens.generate_tokens(player_build, build_prefix);
+        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+        build_tokens.generate_tokens(player_build, token_prefix);
 
         if player_build.len() <= 3 {
-          println!("Build has less than 3 buildings: {:?}", player_build);
+          // println!("Build has less than 3 buildings: {:?}", player_build);
           continue;
         }
 
@@ -159,42 +163,51 @@ fn main() {
   println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
 
   let token_path_time = now.elapsed();
+  let mut skipped_builds = 0;
   for replay_summary in &result.replays {
     let mut races = vec![];
+    let mut matchup = vec![];
     if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
       for player in players {
         races.push(player.race.clone());
+        matchup.push(player.race.clone());
       }
     }
+    matchup.sort();
 
     if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-      let matchup_prefix = races.join(",");
+      let matchup_prefix = matchup.join(",");
       for (p_id, player_build) in builds.iter().enumerate() {
         if player_build.len() <= 3 {
-          println!("Build has less than 3 buildings: {:?}", player_build);
+          // println!("Build has less than 3 buildings: {:?}", player_build);
+          skipped_builds += 1;
           continue;
         }
 
-        let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_token_paths(player_build, build_prefix);
+        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+        build_tokens.generate_token_paths(player_build, token_prefix);
       }
     }
   }
 
+  // sort by token path probabilities
+  build_tokens.token_paths
+    .sort_by(|a, b|
+      a.1
+        .partial_cmp(&b.1)
+        .expect("path probabilities should be floats"));
+
   let mut set = HashSet::new();
-  for path in &build_tokens.token_paths {
+  for (path, _) in &build_tokens.token_paths {
     set.insert(path);
   }
-  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
-  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
-
-  println!("cached token paths {:?}", build_tokens.cached_token_paths.len());
-  for (build, cached) in &build_tokens.cached_token_paths {
-    for c in cached {
-      // println!("cached: {:?}", c);
-    }
-    println!("build cached paths {:?} {:?}", build, cached.len());
+  for (t, p) in &build_tokens.token_paths {
+    println!("{:?} {:?}", p, t);
   }
+  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
+  println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
+  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
+  println!("{:?} vs {:?}", num_replays * 2, build_tokens.token_paths.len() + build_tokens.skipped_builds.len() + skipped_builds);
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
