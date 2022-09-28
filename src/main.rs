@@ -198,11 +198,11 @@ fn main() {
         .expect("path probabilities should be floats"));
 
   let mut set = HashSet::new();
-  for (path, _) in &build_tokens.token_paths {
+  for (path, _, _) in &build_tokens.token_paths {
     set.insert(path);
   }
-  for (t, p) in &build_tokens.token_paths {
-    println!("{:?} {:?}", p, t);
+  for (t, p, s) in &build_tokens.token_paths {
+    println!("{:?} {:?} {:?} {:?}", p / *s as f32, p, s, t);
   }
   println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
   println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
