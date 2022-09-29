@@ -94,16 +94,16 @@ impl ObjectEvent {
       return Err("Building not found");
     }
 
-    let mut player_index = player_id - 1;
     let tag = (tag_index << 18) + tag_recycle;
-    match game.buildings.get(&tag) {
+    let player_index = match game.buildings.get(&tag) {
       Some(building_player_id) => {
-        player_index = building_player_id - 1;
+        building_player_id - 1
       },
       None => {
         game.buildings.insert(tag, player_id);
+        player_id - 1
       },
-    }
+    };
 
     if player_index > 1 {
       return Err("More than 2 players in replay");

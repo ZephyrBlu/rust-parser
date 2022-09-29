@@ -114,7 +114,8 @@ pub enum DecoderResult {
   Blob(String),
   Array(Vec<DecoderResult>),
   DataFragment(u32),
-  Pair((u8, i8)),
+  Pair((i64, i16)),
+  Gameloop((String, i64)),
   Bool(bool),
   Struct(Vec<EventEntry>),
   Null,
@@ -241,6 +242,7 @@ impl Decoder for BitPackedDecoder<'_> {
     match self._int(bounds) {
       DecoderResult::Value(value) => {
         let bytes = self.buffer.read_bits(value as u8);
+        // DecoderResult::Pair((value, bytes as i16))
         DecoderResult::Pair((0, 0))
       }
       _other => panic!("instance didn't return DecoderResult::Value {:?}", _other),
@@ -278,9 +280,12 @@ impl Decoder for BitPackedDecoder<'_> {
       panic!("CorruptedError");
     }
     let field = &fields[&tag];
-    let choice_res = self.instance(self.typeinfos, &field.1);
+    let choice_res = match self.instance(self.typeinfos, &field.1) {
+      DecoderResult::Value(value) => value,
+      _other => panic!("didn't find DecoderResult::Value"),
+    };
     // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-    DecoderResult::Pair((0, 0))
+    DecoderResult::Gameloop((field.0.to_owned(), choice_res))
   }
 
   fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {
@@ -436,11 +441,15 @@ impl Decoder for VersionedDecoder<'_> {
     DecoderResult::Array(array)
   }
 
-  // this function does not get hit in VersionedDecoder
   fn _bitarray(&mut self, bounds: &Int) -> DecoderResult {
     self.expect_skip(1);
     let length = self._vint();
     let bytes = self.buffer.read_aligned_bytes((length as usize + 7) / 8);
+    let mut value: i16 = 0;
+    for v in bytes {
+      value += *v as i16;
+    }
+    // DecoderResult::Pair((length, value))
     DecoderResult::Pair((0, 0))
   }
 
@@ -474,9 +483,12 @@ impl Decoder for VersionedDecoder<'_> {
       return DecoderResult::Pair((0, 0));
     }
     let field = &fields[&tag];
-    let choice_res = self.instance(self.typeinfos, &field.1);
+    let choice_res = match self.instance(self.typeinfos, &field.1) {
+      DecoderResult::Value(value) => value,
+      _other => panic!("didn't find DecoderResult::Value"),
+    };
     // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-    DecoderResult::Pair((0, 0))
+    DecoderResult::Gameloop((field.0.to_owned(), choice_res))
   }
 
   fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {

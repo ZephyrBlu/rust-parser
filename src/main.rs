@@ -13,7 +13,7 @@ use crate::parser::ReplayParser;
 use crate::replay::Replay;
 use crate::index::Index;
 use crate::utils::visit_dirs;
-use crate::builds::BuildTokens;
+use crate::builds::Builds;
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -68,8 +68,8 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
+  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -91,7 +91,7 @@ fn main() {
   let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
 
-  let mut build_tokens = BuildTokens::new();
+  let mut build_tokens = Builds::new();
 
   for replay in replays {
     let content_hash = replay.content_hash.clone();
@@ -201,13 +201,21 @@ fn main() {
   for (path, _, _) in &build_tokens.token_paths {
     set.insert(path);
   }
-  for (t, p, s) in &build_tokens.token_paths {
-    println!("{:?} {:?} {:?} {:?}", p / *s as f32, p, s, t);
-  }
-  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
-  println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
-  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
-  println!("{:?} vs {:?}", num_replays * 2, build_tokens.token_paths.len() + build_tokens.skipped_builds.len() + skipped_builds);
+  // for (t, p, s) in &build_tokens.token_paths {
+  //   println!("{:?} {:?} {:?} {:?}", p / *s as f32, p, s, t);
+  // }
+  // println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
+  // println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
+  // println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
+  // println!("{:?} vs {:?}", num_replays * 2, build_tokens.token_paths.len() + build_tokens.skipped_builds.len() + skipped_builds);
+
+  let a = vec![String::from("a"), String::from("c"), String::from("a"), String::from("b")];
+  let b = vec![String::from("a"), String::from("b")];
+  let res = Builds::test_sequence_matching(&a, &b);
+  println!("sequence matching {:?}\n", res);
+  let res2 = Builds::test_sequence_matching(&b, &a);
+  println!("sequence matching {:?}", res2);
+  // build_tokens.compare_builds();
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 

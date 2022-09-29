@@ -604,8 +604,10 @@ impl<'a> Protocol<'a> {
       let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
 
       let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
-      if let DecoderResult::Value(v) = delta {
+      if let DecoderResult::Gameloop((_, v)) = delta {
         gameloop += v;
+      } else {
+        panic!("found something else {:?}", delta);
       }
 
       let event_id = match decoder.instance(&self.typeinfos, &TRACKER_EVENTID_TYPEID) {
