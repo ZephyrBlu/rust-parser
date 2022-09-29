@@ -209,13 +209,12 @@ fn main() {
   // println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
   // println!("{:?} vs {:?}", num_replays * 2, build_tokens.token_paths.len() + build_tokens.skipped_builds.len() + skipped_builds);
 
-  let a = vec![String::from("a"), String::from("c"), String::from("a"), String::from("b")];
-  let b = vec![String::from("a"), String::from("b")];
-  let res = Builds::test_sequence_matching(&a, &b);
-  println!("sequence matching {:?}\n", res);
-  let res2 = Builds::test_sequence_matching(&b, &a);
-  println!("sequence matching {:?}", res2);
-  // build_tokens.compare_builds();
+  // let a = vec![String::from("a"), String::from("c"), String::from("a"), String::from("b")];
+  // let b = vec![String::from("a"), String::from("b")];
+  // let res = Builds::test_sequence_matching(&a, &b);
+  // println!("sequence matching {:?}\n", res);
+  // let res2 = Builds::test_sequence_matching(&b, &a);
+  // println!("sequence matching {:?}", res2);
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 

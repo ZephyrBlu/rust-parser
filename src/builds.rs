@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::fmt::Debug;
 
 pub struct Builds {
   tokens: HashMap<String, u32>,
@@ -14,6 +16,8 @@ const MAX_TOKEN_SIZE: usize = 4;
 const TOKEN_SEPARATOR: char = ':';
 const TOKEN_TERMINATOR: &str = "NONE";
 const BUILDING_SEPARATOR: &str = ",";
+const BUILDING_SEPARATOR_CHAR: char = ',';
+const MATCHUP_SEPARATOR: &str = "-";
 
 impl Builds {
   pub fn new() -> Builds {
@@ -228,15 +232,15 @@ impl Builds {
   }
 
   // https://github.com/python/cpython/blob/c6b84a727c9299f24edbab4105ce47e9f2bae199/Lib/difflib.py#L305
-  fn find_longest_match(
-    build: &Vec<String>,
-    other_build: &Vec<String>,
+  fn find_longest_match<S: Into<String> + Debug>(
+    build: &Vec<S>,
+    other_build: &Vec<S>,
     build_low: u8,
     build_high: u8,
     other_build_low: u8,
     other_build_high: u8,
-  ) -> (u8, u8, u8) {
-    let mut other_build_mapping: HashMap<&String, Vec<u8>> = HashMap::new();
+  ) -> (u8, u8, u8) where S: Eq + Hash {
+    let mut other_build_mapping: HashMap<&S, Vec<u8>> = HashMap::new();
     for (index, building) in other_build.iter().enumerate() {
       other_build_mapping
         .entry(building)
@@ -326,7 +330,10 @@ impl Builds {
   }
 
   // https://github.com/python/cpython/blob/c6b84a727c9299f24edbab4105ce47e9f2bae199/Lib/difflib.py#L421
-  fn get_matching_blocks(build: &Vec<String>, other_build: &Vec<String>) -> Vec<(u8, u8, u8)> {
+  fn get_matching_blocks<S: Into<String> + Eq + Hash + Debug>(
+    build: &Vec<S>,
+    other_build: &Vec<S>,
+  ) -> Vec<(u8, u8, u8)> {
     let mut queue: Vec<(u8, u8, u8, u8)> = vec![(0, build.len() as u8, 0, other_build.len() as u8)];
     let mut matching_blocks = vec![];
 
@@ -339,8 +346,8 @@ impl Builds {
       ) = queue.pop().unwrap();
 
       let longest_match = Builds::find_longest_match(
-        &build,
-        &other_build,
+        build,
+        other_build,
         build_low_index,
         build_high_index,
         other_build_low_index,
@@ -421,26 +428,98 @@ impl Builds {
     non_adjacent
   }
 
-  pub fn test_sequence_matching(a: &Vec<String>, b: &Vec<String>) -> Vec<(u8, u8, u8)> {
-    Builds::get_matching_blocks(a, b)
+  pub fn compare_builds(&mut self) {
+    let mut build_path_mappings: HashMap<&String, Vec<&str>> = HashMap::new();
+    let mut build_building_count: HashMap<String, u8> = HashMap::new();
+    for (path, _, _) in &self.token_paths {
+      let mapped_path: Vec<&str> = path.split(
+        |c| c == TOKEN_SEPARATOR || c == BUILDING_SEPARATOR_CHAR
+      ).collect();
+
+      for building in &mapped_path {
+        let building_identifier = format!("{}__{building}", mapped_path.join(","));
+        build_building_count
+          .entry(building_identifier)
+          .and_modify(|count| *count += 1)
+          .or_insert(1);
+      }
+
+      build_path_mappings.insert(path, mapped_path);
+    }
+
+    let mut build_matching_buildings = vec![];
+    let mut other_build_matching_buildings = vec![];
+    let mut match_missing_building_count: HashMap<&str, u8> = HashMap::new();
+    for (path, build) in &build_path_mappings {
+      for (other_path, other_build) in &build_path_mappings {
+        if path == other_path {
+          continue;
+        }
+
+        let build_matchup = path
+          .split(TOKEN_SEPARATOR).collect::<Vec<&str>>()[0]
+          .split(MATCHUP_SEPARATOR).collect::<Vec<&str>>()[1];
+        let other_build_matchup = other_path
+          .split(TOKEN_SEPARATOR).collect::<Vec<&str>>()[0]
+          .split(MATCHUP_SEPARATOR).collect::<Vec<&str>>()[1];
+
+        // only generate comparisons for builds from the same matchup
+        if build_matchup != other_build_matchup {
+          continue;
+        }
+
+        if build.join(BUILDING_SEPARATOR) == other_build.join(BUILDING_SEPARATOR) {
+          // information == 0
+        }
+
+        // this is all wrong right now
+        for matching_block in Builds::get_matching_blocks(build, other_build) {
+          for i in matching_block.0..matching_block.0 + matching_block.2 {
+            build_matching_buildings.push(build[i as usize]);
+          }
+
+          let mut prev_building = build_matching_buildings[0];
+          let mut missing_building_count = 0;
+          for building in &build_matching_buildings {
+            if *building == prev_building {
+              missing_building_count += 1;
+            } else {
+              match_missing_building_count.insert(prev_building, missing_building_count);
+              prev_building = building;
+              missing_building_count = 1;
+            }
+          }
+
+          // -----
+
+          for i in matching_block.1..matching_block.1 + matching_block.2 {
+            other_build_matching_buildings.push(other_build[i as usize]);
+          }
+          other_build_matching_buildings.sort();
+
+          let mut other_prev_building = other_build_matching_buildings[0];
+          let mut other_missing_building_count = 0;
+          for building in &other_build_matching_buildings {
+            if *building == other_prev_building {
+              other_missing_building_count += 1;
+            } else {
+              match_missing_building_count.insert(other_prev_building, other_missing_building_count);
+              other_prev_building = building;
+              other_missing_building_count = 1;
+            }
+          }
+        }
+
+        // calculate and sum td-idf values for each building in both builds being compared which is not a match
+        // this calculates the total information difference between builds
+
+      }
+
+      // reset matching buildings for next build comparison
+      build_matching_buildings.clear();
+      other_build_matching_buildings.clear();
+    }
   }
-
-  // pub fn compare_builds(&mut self) {
-  //   let mut build_path_mappings: HashMap<&String, Vec<&str>> = HashMap::new();
-  //   let mut non_matching_building_count: HashMap<String, u8> = HashMap::new();
-  //   for (path, _, _) in &self.token_paths {
-  //     let mapped_path = path.split(
-  //       |c| c == TOKEN_SEPARATOR || c == BUILDING_SEPARATOR_CHAR
-  //     ).collect();
-  //     build_path_mappings.insert(path, mapped_path);
-  //   }
-
-  //   for (path, build) in &build_path_mappings {
-  //     for (other_path, other_build) in &build_path_mappings {
-
-  //     }
-  //   }
-  // }
 
   // pub fn generate_clusters(&mut self) {
   //   while true {
