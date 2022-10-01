@@ -68,8 +68,8 @@ struct SerializedReplays<'a> {
 fn main() {
   let now = Instant::now();
 
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
-  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice");
+  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -184,8 +184,8 @@ fn main() {
           continue;
         }
 
-        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_token_paths(player_build, token_prefix);
+        let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+        build_tokens.generate_token_paths(player_build, build_prefix);
       }
     }
   }
@@ -201,20 +201,26 @@ fn main() {
   for (path, _, _) in &build_tokens.token_paths {
     set.insert(path);
   }
-  // for (t, p, s) in &build_tokens.token_paths {
-  //   println!("{:?} {:?} {:?} {:?}", p / *s as f32, p, s, t);
-  // }
-  // println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
-  // println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
-  // println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
-  // println!("{:?} vs {:?}", num_replays * 2, build_tokens.token_paths.len() + build_tokens.skipped_builds.len() + skipped_builds);
+  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
+  println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
+  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
 
-  // let a = vec![String::from("a"), String::from("c"), String::from("a"), String::from("b")];
-  // let b = vec![String::from("a"), String::from("b")];
-  // let res = Builds::test_sequence_matching(&a, &b);
-  // println!("sequence matching {:?}\n", res);
-  // let res2 = Builds::test_sequence_matching(&b, &a);
-  // println!("sequence matching {:?}", res2);
+
+  build_tokens.compare_builds();
+  let mut build_information = vec![];
+  for (builds, information) in &build_tokens.build_comparison_information {
+    build_information.push((information, builds));
+  }
+  build_information.sort_by(|a, b|
+    a.0
+      .partial_cmp(&b.0)
+      .expect("path probabilities should be floats"));
+  build_information.reverse();
+
+  // for (information, builds) in build_information {
+  //   println!("{:?} {:?}", information, builds);
+  // }
+  println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 

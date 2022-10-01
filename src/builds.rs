@@ -9,15 +9,17 @@ pub struct Builds {
   build_token_paths: Vec<(String, f32, u8)>,
   pub token_paths: Vec<(String, f32, u8)>,
   pub skipped_builds: Vec<String>,
+  pub build_comparison_information: HashMap<String, f32>,
   // cluster_comparisons: HashMap<>,
 }
 
 const MAX_TOKEN_SIZE: usize = 4;
+const SECTION_SEPARATOR: &str = "__";
 const TOKEN_SEPARATOR: char = ':';
 const TOKEN_TERMINATOR: &str = "NONE";
 const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
-const MATCHUP_SEPARATOR: &str = "-";
+const BUILD_SEPARATOR: &str = "--";
 
 impl Builds {
   pub fn new() -> Builds {
@@ -28,6 +30,7 @@ impl Builds {
       build_token_paths: vec![],
       token_paths: vec![],
       skipped_builds: vec![],
+      build_comparison_information: HashMap::new(),
     }
   }
 
@@ -43,7 +46,7 @@ impl Builds {
           next_token = &tokens[tokens.len() - 1];
         }
 
-        let identifier_token = format!("{token_prefix}__{current_token}__{next_token}");
+        let identifier_token = format!("{token_prefix}{SECTION_SEPARATOR}{current_token}{SECTION_SEPARATOR}{next_token}");
         self.tokens.entry(identifier_token).and_modify(|count| *count += 1).or_insert(1);
 
         if i + window_size >= build.len() {
@@ -56,15 +59,15 @@ impl Builds {
   pub fn generate_token_distributions(&mut self) {
     let mut token_totals: HashMap<String, u32> = HashMap::new();
     for (key, token_count) in &self.tokens {
-      let values: Vec<&str> = key.split("__").collect();
+      let values: Vec<&str> = key.split(SECTION_SEPARATOR).collect();
       let prefix = values[0];
       let current_token = values[1];
       let next_token = values[2];
 
       let current_token_identifier = if next_token == TOKEN_TERMINATOR {
-        format!("{prefix}__{TOKEN_TERMINATOR}")
+        format!("{prefix}{SECTION_SEPARATOR}{TOKEN_TERMINATOR}")
       } else {
-        format!("{prefix}__{current_token}")
+        format!("{prefix}{SECTION_SEPARATOR}{current_token}")
       };
 
       token_totals
@@ -74,15 +77,15 @@ impl Builds {
     }
 
     for (key, count) in &self.tokens {
-      let values: Vec<&str> = key.split("__").collect();
+      let values: Vec<&str> = key.split(SECTION_SEPARATOR).collect();
       let prefix = values[0];
       let current_token = values[1];
       let next_token = values[2];
 
       let current_token_identifier = if next_token == TOKEN_TERMINATOR {
-        format!("{prefix}__{TOKEN_TERMINATOR}")
+        format!("{prefix}{SECTION_SEPARATOR}{TOKEN_TERMINATOR}")
       } else {
-        format!("{prefix}__{current_token}")
+        format!("{prefix}{SECTION_SEPARATOR}{current_token}")
       };
 
       let current_token_total = match token_totals.get(&current_token_identifier) {
@@ -90,24 +93,24 @@ impl Builds {
         None => panic!("Couldn't find total for current token: {:?}", current_token),
       };
 
-       // not enough occurrences to generate a meaningful probability
-       if *current_token_total < 10 {
+      // not enough occurrences to generate a meaningful probability
+      if *current_token_total < 10 {
         continue;
       }
 
       let probability = *count as f32 / *current_token_total as f32;
-      // println!("token probability\n{:?}\n{:?}\n{:?} {:?} {:?}\n", key, current_token_identifier, count, current_token_total, probability);
+      //  println!("token probability\n{:?}\n{:?}\n{:?} {:?} {:?}\n", key, current_token_identifier, count, current_token_total, probability);
       self.probability.insert(key.to_string(), probability);
     }
   }
 
-  pub fn generate_token_paths(&mut self, build: &Vec<String>, token_prefix: String) {
+  pub fn generate_token_paths(&mut self, build: &Vec<String>, build_prefix: String) {
     self.generate_next_path(
       String::new(),
       0,
       1.0,
       build,
-      token_prefix.as_str(),
+      build_prefix.as_str(),
       0,
     );
 
@@ -135,7 +138,7 @@ impl Builds {
     current_path_length: usize,
     path_probability: f32,
     build: &'a Vec<String>,
-    token_prefix: &str,
+    build_prefix: &str,
     build_index: usize,
   ) {
     for token_window in 1..MAX_TOKEN_SIZE + 1 {
@@ -144,7 +147,8 @@ impl Builds {
         // ensure we have a path the same size as our original build
         // paths may be shorter if the last token was skipped due to low probability
         if current_path_length == build.len() {
-          self.build_token_paths.push((current_path, path_probability, current_path_length as u8));
+          let token_path = format!("{build_prefix}{SECTION_SEPARATOR}{current_path}");
+          self.build_token_paths.push((token_path, path_probability, current_path_length as u8));
         }
         break;
       }
@@ -163,7 +167,7 @@ impl Builds {
       }
 
       let mut next_path_probability = path_probability.clone();
-      let identifier_token = format!("{token_prefix}__{current_token}__{next_token}");
+      let identifier_token = format!("{build_prefix}{SECTION_SEPARATOR}{current_token}{SECTION_SEPARATOR}{next_token}");
 
       // if we don't have a conditional probability for the tokens there was < 10 occurrences
       if !self.probability.contains_key(&identifier_token) {
@@ -192,7 +196,7 @@ impl Builds {
             next_token_fragment = &tokens[token_fragment_window - 1];
           }
 
-          let identifier_token_fragment = format!("{token_prefix}__{current_token_fragment}__{next_token_fragment}");
+          let identifier_token_fragment = format!("{build_prefix}{SECTION_SEPARATOR}{current_token_fragment}{SECTION_SEPARATOR}{next_token_fragment}");
 
           // if we find a subsequence that has already been computed, use the cached value and finish the computation
           if let Some(token_fragment_sequence_probability) = self.cached_token_probability.get(&identifier_token_fragment) {
@@ -225,7 +229,7 @@ impl Builds {
         next_path_length,
         next_path_probability,
         build,
-        token_prefix,
+        build_prefix,
         build_index + token_window,
       );
     }
@@ -258,9 +262,7 @@ impl Builds {
     for building_index in build_low..build_high {
       let mut new_match_sizes: HashMap<i8, i8> = HashMap::new();
       if let Some(building_match_indexes) = other_build_mapping.get(&build[building_index as usize]) {
-        println!("\nbuilding match indexes {:?} {:?}", &build[building_index as usize], building_match_indexes);
         for other_build_index in building_match_indexes {
-          println!("checking other build indexes {:?} {:?} {:?}", other_build_index, build_low, build_high);
           if *other_build_index < other_build_low {
             continue;
           }
@@ -276,8 +278,6 @@ impl Builds {
           };
           new_match_sizes.insert(*other_build_index as i8,  new_match_size);
 
-          println!("match size comparison {:?}, {:?} {:?}, {:?} {:?}", size_lookup_index, building_index, other_build_index, new_match_size, best_match_size);
-
           if new_match_size > best_match_size {
             (
               best_match_lower_bound,
@@ -288,15 +288,10 @@ impl Builds {
               (other_build_index + 1) - new_match_size as u8,
               new_match_size,
             );
-            println!("updated match {:?} {:?} {:?}", best_match_lower_bound, best_match_upper_bound, best_match_size);
           }
         }
       }
       match_sizes = new_match_sizes;
-    }
-
-    if best_match_lower_bound > 0 && best_match_upper_bound > 0 {
-      println!("matching stuff {:?} > {:?}, {:?} > {:?}, {:?} == {:?}\n", best_match_lower_bound, build_low, best_match_upper_bound, other_build_low, build[(best_match_lower_bound - 1) as usize], other_build[(best_match_upper_bound - 1) as usize]);
     }
 
     while
@@ -304,8 +299,6 @@ impl Builds {
       (best_match_upper_bound > other_build_low) &&
       (build[(best_match_lower_bound - 1) as usize] == other_build[(best_match_upper_bound - 1) as usize])
     {
-      println!("looping");
-      println!("matching stuff {:?} > {:?}, {:?} > {:?}, {:?} == {:?}", best_match_lower_bound, build_low, best_match_upper_bound, other_build_low, build[(best_match_lower_bound - 1) as usize], other_build[(best_match_upper_bound - 1) as usize]);
       (
         best_match_lower_bound,
         best_match_upper_bound,
@@ -315,7 +308,6 @@ impl Builds {
         best_match_upper_bound - 1,
         best_match_size + 1,
       );
-      println!("updated {:?} {:?} {:?}\n", best_match_lower_bound, best_match_upper_bound, best_match_size);
     }
 
     while
@@ -353,7 +345,7 @@ impl Builds {
         other_build_low_index,
         other_build_high_index,
       );
-      println!("longest match {:?}", longest_match);
+      // println!("longest match {:?}", longest_match);
       let (build_match_index, other_build_match_index, match_length) = longest_match;
 
       if match_length != 0 {
@@ -430,94 +422,196 @@ impl Builds {
 
   pub fn compare_builds(&mut self) {
     let mut build_path_mappings: HashMap<&String, Vec<&str>> = HashMap::new();
-    let mut build_building_count: HashMap<String, u8> = HashMap::new();
+    // let mut build_building_count: HashMap<String, u8> = HashMap::new();
     for (path, _, _) in &self.token_paths {
-      let mapped_path: Vec<&str> = path.split(
-        |c| c == TOKEN_SEPARATOR || c == BUILDING_SEPARATOR_CHAR
-      ).collect();
+      let mapped_path: Vec<&str> = path
+        .split(SECTION_SEPARATOR)
+          .collect::<Vec<&str>>()[1]
+        .split(
+          |c| c == TOKEN_SEPARATOR || c == BUILDING_SEPARATOR_CHAR
+        ).collect();
 
-      for building in &mapped_path {
-        let building_identifier = format!("{}__{building}", mapped_path.join(","));
-        build_building_count
-          .entry(building_identifier)
-          .and_modify(|count| *count += 1)
-          .or_insert(1);
-      }
+      // for building in &mapped_path {
+      //   let building_identifier = format!("{}__{building}", mapped_path.join(","));
+      //   build_building_count
+      //     .entry(building_identifier)
+      //     .and_modify(|count| *count += 1)
+      //     .or_insert(1);
+      // }
 
       build_path_mappings.insert(path, mapped_path);
     }
 
-    let mut build_matching_buildings = vec![];
-    let mut other_build_matching_buildings = vec![];
-    let mut match_missing_building_count: HashMap<&str, u8> = HashMap::new();
+    let mut build_missing_buildings = vec![];
+    let mut other_build_missing_buildings = vec![];
+    let mut build_missing_building_count: HashMap<&str, u8> = HashMap::new();
+    let mut other_build_missing_building_count: HashMap<&str, u8> = HashMap::new();
     for (path, build) in &build_path_mappings {
       for (other_path, other_build) in &build_path_mappings {
+        // skip when we encounter the same game
         if path == other_path {
           continue;
         }
 
-        let build_matchup = path
-          .split(TOKEN_SEPARATOR).collect::<Vec<&str>>()[0]
-          .split(MATCHUP_SEPARATOR).collect::<Vec<&str>>()[1];
-        let other_build_matchup = other_path
-          .split(TOKEN_SEPARATOR).collect::<Vec<&str>>()[0]
-          .split(MATCHUP_SEPARATOR).collect::<Vec<&str>>()[1];
+        let build_prefix = path.split(SECTION_SEPARATOR).collect::<Vec<&str>>()[0];
+        let other_build_prefix = other_path.split(SECTION_SEPARATOR).collect::<Vec<&str>>()[0];
 
-        // only generate comparisons for builds from the same matchup
-        if build_matchup != other_build_matchup {
+        // only generate comparisons for builds from the same race and same matchup
+        if build_prefix != other_build_prefix {
           continue;
         }
 
-        if build.join(BUILDING_SEPARATOR) == other_build.join(BUILDING_SEPARATOR) {
-          // information == 0
+        let joined_build = build.join(BUILDING_SEPARATOR);
+        let joined_other_build = other_build.join(BUILDING_SEPARATOR);
+
+        // if the builds being compared are the same, there is no difference in information
+        if joined_build == joined_other_build {
+          continue;
         }
 
-        // this is all wrong right now
-        for matching_block in Builds::get_matching_blocks(build, other_build) {
-          for i in matching_block.0..matching_block.0 + matching_block.2 {
-            build_matching_buildings.push(build[i as usize]);
-          }
+        let mut comparison_builds = vec![
+          format!("{build_prefix}{SECTION_SEPARATOR}{joined_build}"),
+          format!("{other_build_prefix}{SECTION_SEPARATOR}{joined_other_build}"),
+        ];
+        comparison_builds.sort();
+        let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
 
-          let mut prev_building = build_matching_buildings[0];
-          let mut missing_building_count = 0;
-          for building in &build_matching_buildings {
-            if *building == prev_building {
-              missing_building_count += 1;
-            } else {
-              match_missing_building_count.insert(prev_building, missing_building_count);
-              prev_building = building;
-              missing_building_count = 1;
+        // println!("comparing builds\n{:?}\n{:?}", joined_build, joined_other_build);
+
+        // we already have information on this build comparison
+        if let Some(_) = self.build_comparison_information.get(&build_comparison_identifier) {
+          continue;
+        }
+
+        for matching_block in Builds::get_matching_blocks(build, other_build) {
+          let build_matching_range = matching_block.0..matching_block.0 + matching_block.2;
+          for i in 0..build.len() as u8 {
+            // only push buildings which are not in the matching block ranges
+            if !build_matching_range.contains(&i) {
+              build_missing_buildings.push(build[i as usize]);
             }
           }
 
           // -----
 
-          for i in matching_block.1..matching_block.1 + matching_block.2 {
-            other_build_matching_buildings.push(other_build[i as usize]);
-          }
-          other_build_matching_buildings.sort();
-
-          let mut other_prev_building = other_build_matching_buildings[0];
-          let mut other_missing_building_count = 0;
-          for building in &other_build_matching_buildings {
-            if *building == other_prev_building {
-              other_missing_building_count += 1;
-            } else {
-              match_missing_building_count.insert(other_prev_building, other_missing_building_count);
-              other_prev_building = building;
-              other_missing_building_count = 1;
+          let other_build_matching_range = matching_block.1..matching_block.1 + matching_block.2;
+          for i in 0..other_build.len() as u8 {
+            // only push buildings which are not in the matching block ranges
+            if !other_build_matching_range.contains(&i) {
+              other_build_missing_buildings.push(other_build[i as usize]);
             }
           }
         }
 
+        build_missing_buildings.sort();
+        other_build_missing_buildings.sort();
+
+        // if one build is a subset of the other there may be no matches for the subset build
+        if build_missing_buildings.len() != 0 {
+          let mut prev_building = build_missing_buildings[0];
+          let mut missing_building_count = 0;
+          for building in &build_missing_buildings {
+            if *building == prev_building {
+              missing_building_count += 1;
+            } else {
+              build_missing_building_count.insert(prev_building, missing_building_count);
+              prev_building = building;
+              missing_building_count = 1;
+            }
+          }
+          // captures the last building
+          build_missing_building_count.insert(prev_building, missing_building_count);
+        }
+
+        // if one build is a subset of the other there may be no matches for the subset build
+        if other_build_missing_buildings.len() != 0 {
+          let mut other_prev_building = other_build_missing_buildings[0];
+          let mut other_missing_building_count = 0;
+          for building in &other_build_missing_buildings {
+            if *building == other_prev_building {
+              other_missing_building_count += 1;
+            } else {
+              other_build_missing_building_count.insert(other_prev_building, other_missing_building_count);
+              other_prev_building = building;
+              other_missing_building_count = 1;
+            }
+          }
+          // captures the last building
+          other_build_missing_building_count.insert(other_prev_building, other_missing_building_count);
+        }
+
+        // ---
+
+        let mut match_information_difference = 0.0;
+
         // calculate and sum td-idf values for each building in both builds being compared which is not a match
         // this calculates the total information difference between builds
+        for (index, building) in build.iter().enumerate() {
+          // building is matching with other build, not missing
+          if let None = build_missing_building_count.get(building) {
+            continue;
+          }
 
+          // building information generated from independent probability of the building
+          let token_identifier = format!("{build_prefix}{SECTION_SEPARATOR}{building}{SECTION_SEPARATOR}{TOKEN_TERMINATOR}");
+          let building_information = -self.probability[&token_identifier].log2();
+
+          let mut tf_idf = 0.0;
+          if index < 10 {
+            // https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Term_frequency%E2%80%93inverse_document_frequency
+            // 1 / frequency so tf-idf value can be scaled based on building index
+            tf_idf = (1.0 / (build_missing_building_count[building] as f32)) * building_information;
+            if index > 5 {
+              // scaling tf-idf based on building index to prevent later buildings having outsized
+              // effect on comparison information since later buildings naturally have less relevance
+              tf_idf *= 1.0 - ((index - 5) as f32 / 5.0);
+            }
+            // println!("tf-idf inside loop {:?} {:?} {:?}", tf_idf, build_missing_building_count[building], building_information);
+          }
+          match_information_difference += tf_idf;
+          // println!("build tf-idf {:?} {:?} {:?} {:?}", match_information_difference, tf_idf, building_information, build_missing_building_count[building]);
+        }
+
+        for (index, other_building) in other_build.iter().enumerate() {
+          // building is matching with other build, not missing
+          if let None = other_build_missing_building_count.get(other_building) {
+            continue;
+          }
+
+          // building information generated from independent probability of the building
+          let token_identifier = format!("{other_build_prefix}{SECTION_SEPARATOR}{other_building}{SECTION_SEPARATOR}{TOKEN_TERMINATOR}");
+          let building_information = -self.probability[&token_identifier].log2();
+
+          let mut tf_idf = 0.0;
+          if index < 10 {
+            // https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Term_frequency%E2%80%93inverse_document_frequency
+            // 1 / frequency so tf-idf value can be scaled based on building index
+            tf_idf = (1.0 / (other_build_missing_building_count[other_building] as f32)) * building_information;
+            if index > 5 {
+              // scaling tf-idf based on building index to prevent later buildings having outsized
+              // effect on comparison information since later buildings naturally have less relevance
+              tf_idf *= 1.0 - ((index - 5) as f32 / 5.0);
+            }
+            // println!("tf-idf inside loop {:?} {:?} {:?}", tf_idf, other_build_missing_building_count[other_building], building_information);
+          }
+          match_information_difference += tf_idf;
+          // println!("other build tf-idf {:?} {:?} {:?} {:?}", match_information_difference, tf_idf, other_build_missing_building_count[other_building], building_information);
+        }
+
+        if match_information_difference == 0.0 {
+          println!("no information difference {:?} {:?}", build, other_build);
+        }
+
+        // reset matching buildings for next build comparison
+        build_missing_buildings.clear();
+        other_build_missing_buildings.clear();
+
+        // reset missing builing count
+        build_missing_building_count.clear();
+        other_build_missing_building_count.clear();
+
+        self.build_comparison_information.insert(build_comparison_identifier, match_information_difference);
       }
-
-      // reset matching buildings for next build comparison
-      build_matching_buildings.clear();
-      other_build_matching_buildings.clear();
     }
   }
 
