@@ -484,6 +484,7 @@ impl Builds {
         }
 
         for matching_block in Builds::get_matching_blocks(build, other_build) {
+          // rounds to 2 dp
           let build_matching_range = matching_block.0..matching_block.0 + matching_block.2;
           for i in 0..build.len() as u8 {
             // only push buildings which are not in the matching block ranges
@@ -598,10 +599,6 @@ impl Builds {
           // println!("other build tf-idf {:?} {:?} {:?} {:?}", match_information_difference, tf_idf, other_build_missing_building_count[other_building], building_information);
         }
 
-        if match_information_difference == 0.0 {
-          println!("no information difference {:?} {:?}", build, other_build);
-        }
-
         // reset matching buildings for next build comparison
         build_missing_buildings.clear();
         other_build_missing_buildings.clear();
@@ -610,7 +607,9 @@ impl Builds {
         build_missing_building_count.clear();
         other_build_missing_building_count.clear();
 
-        self.build_comparison_information.insert(build_comparison_identifier, match_information_difference);
+        // if match_information_difference < 10.0 {
+        let rounded_information_difference = (match_information_difference * 100.0).round() / 100.0;
+        self.build_comparison_information.insert(build_comparison_identifier, rounded_information_difference);
       }
     }
   }

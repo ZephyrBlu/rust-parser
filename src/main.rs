@@ -63,6 +63,7 @@ type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
 struct SerializedReplays<'a> {
   #[serde(borrow)]
   replays: Vec<ReplaySummary<'a>>,
+  comparisons: HashMap<u32, &'a f32>,
 }
 
 fn main() {
@@ -80,6 +81,7 @@ fn main() {
   let replay_summaries: Vec<ReplaySummary> = vec![];
   let mut result = SerializedReplays {
     replays: replay_summaries,
+    comparisons: HashMap::new(),
   };
 
   let mut race_index = Index::new();
@@ -158,69 +160,74 @@ fn main() {
     replay_id += 1;
   }
 
-  let distribution_time = now.elapsed();
-  build_tokens.generate_token_distributions();
-  println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
+  // let distribution_time = now.elapsed();
+  // build_tokens.generate_token_distributions();
+  // println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
 
-  let token_path_time = now.elapsed();
-  let mut skipped_builds = 0;
-  for replay_summary in &result.replays {
-    let mut races = vec![];
-    let mut matchup = vec![];
-    if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
-      for player in players {
-        races.push(player.race.clone());
-        matchup.push(player.race.clone());
-      }
-    }
-    matchup.sort();
+  // let token_path_time = now.elapsed();
+  // let mut skipped_builds = 0;
+  // for replay_summary in &result.replays {
+  //   let mut races = vec![];
+  //   let mut matchup = vec![];
+  //   if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
+  //     for player in players {
+  //       races.push(player.race.clone());
+  //       matchup.push(player.race.clone());
+  //     }
+  //   }
+  //   matchup.sort();
 
-    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-      let matchup_prefix = matchup.join(",");
-      for (p_id, player_build) in builds.iter().enumerate() {
-        if player_build.len() <= 3 {
-          // println!("Build has less than 3 buildings: {:?}", player_build);
-          skipped_builds += 1;
-          continue;
-        }
+  //   if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+  //     let matchup_prefix = matchup.join(",");
+  //     for (p_id, player_build) in builds.iter().enumerate() {
+  //       if player_build.len() <= 3 {
+  //         // println!("Build has less than 3 buildings: {:?}", player_build);
+  //         skipped_builds += 1;
+  //         continue;
+  //       }
 
-        let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_token_paths(player_build, build_prefix);
-      }
-    }
-  }
-
-  // sort by token path probabilities
-  build_tokens.token_paths
-    .sort_by(|a, b|
-      a.1
-        .partial_cmp(&b.1)
-        .expect("path probabilities should be floats"));
-
-  let mut set = HashSet::new();
-  for (path, _, _) in &build_tokens.token_paths {
-    set.insert(path);
-  }
-  println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
-  println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
-  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
-
-
-  build_tokens.compare_builds();
-  let mut build_information = vec![];
-  for (builds, information) in &build_tokens.build_comparison_information {
-    build_information.push((information, builds));
-  }
-  build_information.sort_by(|a, b|
-    a.0
-      .partial_cmp(&b.0)
-      .expect("path probabilities should be floats"));
-  build_information.reverse();
-
-  // for (information, builds) in build_information {
-  //   println!("{:?} {:?}", information, builds);
+  //       let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+  //       build_tokens.generate_token_paths(player_build, build_prefix);
+  //     }
+  //   }
   // }
-  println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
+
+  // // sort by token path probabilities
+  // build_tokens.token_paths
+  //   .sort_by(|a, b|
+  //     a.1
+  //       .partial_cmp(&b.1)
+  //       .expect("path probabilities should be floats"));
+
+  // let mut set = HashSet::new();
+  // for (path, _, _) in &build_tokens.token_paths {
+  //   set.insert(path);
+  // }
+  // println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
+  // println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
+  // println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
+
+  // build_tokens.compare_builds();
+  // let mut build_information = vec![];
+  // for (builds, information) in &build_tokens.build_comparison_information {
+  //   build_information.push((information, builds));
+  // }
+  // build_information.sort_by(|a, b|
+  //   a.0
+  //     .partial_cmp(&b.0)
+  //     .expect("path probabilities should be floats"));
+  // build_information.reverse();
+
+  // // for (information, builds) in build_information {
+  // //   println!("{:?} {:?}", information, builds);
+  // // }
+  // println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
+
+  // let mut comparison_mappings: HashMap<u32, &String> = HashMap::new();
+  // for (index, (comparison_identifier, comparison_diff)) in build_tokens.build_comparison_information.iter().enumerate() {
+  //   comparison_mappings.insert(index as u32, comparison_identifier);
+  //   result.comparisons.insert(index as u32, comparison_diff);
+  // }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
@@ -239,11 +246,18 @@ fn main() {
     ("player", player_index),
     ("metadata", metadata_index),
     ("map", map_index),
-    ("build", filtered_build_index),
+    // ("build", filtered_build_index),
   ]);
 
   let index_output = File::create("../sc2.gg/src/assets/indexes.json").unwrap();
   serde_json::to_writer(&index_output, &indexes);
+
+  // let mappings = HashMap::from([
+  //   ("comparisons", comparison_mappings),
+  // ]);
+
+  // let mappings_output = File::create("../sc2.gg/src/assets/mappings.json").unwrap();
+  // serde_json::to_writer(&mappings_output, &mappings);
 
   println!("replays serialized in {:?}", now.elapsed());
 }

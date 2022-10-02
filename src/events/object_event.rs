@@ -61,6 +61,7 @@ impl ObjectEvent {
     let mut building_name = String::new();
     let mut tag_index = 0;
     let mut tag_recycle = 0;
+    let mut current_gameloop = 0;
     // println!("event entry values {:?}", event.entries);
     for (field, value) in &event.entries {
       match field.as_str() {
@@ -85,6 +86,7 @@ impl ObjectEvent {
           if *gameloop > 9408 {
             return Err("Gameloop is past 7min");
           }
+          current_gameloop = *gameloop;
         },
         _other => continue,
       }
@@ -109,7 +111,7 @@ impl ObjectEvent {
       return Err("More than 2 players in replay");
     }
 
-    if game.builds[player_index as usize].len() < 10 {
+    if game.builds[player_index as usize].len() < 10 && current_gameloop > 0 {
       game.builds[player_index as usize].push(building_name);
     }
 
