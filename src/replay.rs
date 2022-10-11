@@ -110,7 +110,7 @@ impl<'a> Replay {
       player_info,
       tracker_events,
       metadata,
-      tags: tags.join(", "),
+      tags: tags.join(","),
     }
   }    
 

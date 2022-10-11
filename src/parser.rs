@@ -192,7 +192,7 @@ impl<'a> ReplayParser<'a> {
       ("game_length", ReplayEntry::GameLength(game_length)),
       ("map", ReplayEntry::Map(map)),
       ("played_at", ReplayEntry::PlayedAt(played_at)),
-      ("summary_stats", ReplayEntry::SummaryStats(summary_stats)),
+      // ("summary_stats", ReplayEntry::SummaryStats(summary_stats)),
       ("metadata", ReplayEntry::Metadata(tags)),
     ]);
 

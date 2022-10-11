@@ -117,7 +117,7 @@ fn main() {
     }
 
     if let ReplayEntry::Metadata(metadata) = replay_summary.get("metadata").unwrap() {
-      for tag in metadata.split(", ") {
+      for tag in metadata.split(",") {
         metadata_index.add(tag.to_string(), replay_id);
       }
     }

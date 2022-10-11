@@ -111,7 +111,11 @@ impl ObjectEvent {
       return Err("More than 2 players in replay");
     }
 
-    if game.builds[player_index as usize].len() < 10 && current_gameloop > 0 {
+    // if game.builds[player_index as usize].len() < 10 && current_gameloop > 0 {
+    //   game.builds[player_index as usize].push(building_name);
+    // }
+
+    if current_gameloop > 0 {
       game.builds[player_index as usize].push(building_name);
     }
 
