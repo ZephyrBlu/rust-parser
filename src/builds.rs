@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::fmt::Debug;
 
 pub struct Builds {
+  builds: HashMap<String, u16>,
   tokens: HashMap<String, u32>,
   cached_token_probability: HashMap<String, f32>,
   pub probability: HashMap<String, f32>,
@@ -10,7 +11,7 @@ pub struct Builds {
   pub token_paths: Vec<(String, f32, u8)>,
   pub skipped_builds: Vec<String>,
   pub build_comparison_information: HashMap<String, f32>,
-  // cluster_comparisons: HashMap<>,
+  cluster_comparisons: HashMap<String, f32>,
 }
 
 const MAX_TOKEN_SIZE: usize = 4;
@@ -21,9 +22,12 @@ const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
 const BUILD_SEPARATOR: &str = "--";
 
+const MAX_COMPARISON_DIFF: f32 = 10.0;
+
 impl Builds {
   pub fn new() -> Builds {
     Builds {
+      builds: HashMap::new(),
       tokens: HashMap::new(),
       cached_token_probability: HashMap::new(),
       probability: HashMap::new(),
@@ -31,10 +35,16 @@ impl Builds {
       token_paths: vec![],
       skipped_builds: vec![],
       build_comparison_information: HashMap::new(),
+      cluster_comparisons: HashMap::new(),
     }
   }
 
   pub fn generate_tokens(&mut self, build: &Vec<String>, token_prefix: String) {
+    self.builds
+      .entry(format!("{token_prefix}{SECTION_SEPARATOR}{}", build.join(BUILDING_SEPARATOR)))
+      .and_modify(|build_count| *build_count += 1)
+      .or_insert(1);
+
     for i in 0..build.len() {
       for window_size in 1..MAX_TOKEN_SIZE + 1 {
         let tokens = &build[i..i + window_size];
@@ -104,7 +114,7 @@ impl Builds {
     }
   }
 
-  pub fn generate_token_paths(&mut self, build: &Vec<String>, build_prefix: String) {
+  pub fn generate_token_paths(&mut self, build: &Vec<String>, build_prefix: String) {    
     self.generate_next_path(
       String::new(),
       0,
@@ -614,61 +624,110 @@ impl Builds {
     }
   }
 
-  // pub fn generate_clusters(&mut self) {
-  //   while true {
+  pub fn generate_clusters(&mut self) {
+    let mut build_clusters: HashMap<String, Vec<String>> = HashMap::new();
+    let mut builds: HashSet<&str> = HashSet::new();
 
-  //   }
-  //   cluster_comparisons = {}
-  //   for (build_id, other_id), diff in build_comparisons.items():
-  //       if build_id in build_clusters and other_id in build_clusters:
-  //           cluster_comparisons[(build_id, other_id)] = diff
+    for (build_comparison, comparison_diff) in &self.build_comparison_information {
+      let comparison_builds: Vec<&str> = build_comparison.split(BUILD_SEPARATOR).collect();
+      builds.insert(comparison_builds[0]);
+      builds.insert(comparison_builds[1]);
+    }
 
-  //   if not cluster_comparisons:
-  //       break
+    for build in builds {
+      build_clusters.insert(build.to_string(), vec![]);
+    }
 
-  //   sorted_comparisons = sorted(
-  //       cluster_comparisons.items(),
-  //       key=lambda build: build[1],
-  //   )
+    let mut cluster_comparisons: Vec<((&str, &str), &f32)> = vec![];
 
-  //   completed = False
-  //   for min_comparison_builds, min_comparison_diff in sorted_comparisons:
-  //       if min_comparison_diff > MAX_COMPARISON_DIFF:
-  //           break
+    loop {
+      cluster_comparisons.clear();
 
-  //       # cross check cluster builds
-  //       cluster_complete_linkage = True
-  //       for build_id in min_comparison_builds:
-  //           other_comparison_id = min_comparison_builds[0] if min_comparison_builds[1] == build_id else min_comparison_builds[1]
-  //           for other_id in build_clusters[build_id]:
-  //               cross_cluster_diff = build_comparisons[tuple(sorted([other_comparison_id, other_id]))]
-  //               if cross_cluster_diff > MAX_COMPARISON_DIFF:
-  //                   # print(other_comparison_id, other_id, cross_cluster_diff)
-  //                   cluster_complete_linkage = False
-  //                   break
+      for (build_comparison, comparison_diff) in &self.build_comparison_information {
+        let comparison_build: Vec<&str> = build_comparison.split(BUILD_SEPARATOR).collect();
+        if
+          build_clusters.contains_key(comparison_build[0]) &&
+          build_clusters.contains_key(comparison_build[1])
+        {
+          // cluster_comparisons.insert(build_comparison, comparison_diff);
+          cluster_comparisons.push(
+            ((comparison_build[0], comparison_build[1]), comparison_diff)
+          );
+        }
+      }
 
-  //           if not cluster_complete_linkage:
-  //               break
+      cluster_comparisons.sort_by(
+        |a, b| a.1.partial_cmp(b.1).unwrap()
+      );
 
-  //       if not cluster_complete_linkage:
-  //           continue
+      let mut completed = false;
+      for ((build, other_build), comparison_diff) in &cluster_comparisons {
+        // base case, if we have iterated far enough to where the diff is too large break out
+        if **comparison_diff > MAX_COMPARISON_DIFF {
+          break;
+        }
 
-  //       max_build_count = -1
-  //       max_build_id = None
-  //       for build_id in min_comparison_builds:
-  //           if build_list[build_id][1] > max_build_count:
-  //               max_build_count = build_list[build_id][1]
-  //               max_build_id = build_id
+        // cross check cluster builds
+        let mut cluster_complete_linkage = true;
 
-  //       other_build_id = min_comparison_builds[0] if min_comparison_builds[1] == max_build_id else min_comparison_builds[1]
-  //       build_clusters[max_build_id].extend(build_clusters[other_build_id])
-  //       build_clusters[max_build_id].append(other_build_id)
-  //       del build_clusters[other_build_id]
-  //       completed = True
-  //       break
+        for clustered_build in build_clusters.get(*build).unwrap() {
+          let mut comparison_builds = vec![other_build.to_string(), clustered_build.clone()];
+          comparison_builds.sort();
+          let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
 
-  //   if not completed:
-  //       break
+          let cross_cluster_diff = &self.build_comparison_information.get(&build_comparison_identifier).unwrap();
+          if **cross_cluster_diff > MAX_COMPARISON_DIFF {
+            cluster_complete_linkage = false;
+            break;
+          }
+        }
 
-  // }
+        for other_clustered_build in build_clusters.get(*other_build).unwrap() {
+          let mut comparison_builds = vec![build.to_string(), other_clustered_build.clone()];
+          comparison_builds.sort();
+          let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
+
+          let cross_cluster_diff = &self.build_comparison_information.get(&build_comparison_identifier).unwrap();
+          if **cross_cluster_diff > MAX_COMPARISON_DIFF {
+            cluster_complete_linkage = false;
+            break;
+          }
+        }
+
+        if !cluster_complete_linkage {
+          continue;
+        }
+
+        let build_count = self.builds[*build];
+        let other_build_count = self.builds[*other_build];
+
+        let max_build;
+        let min_build;
+        if build_count > other_build_count {
+          max_build = build;
+          min_build = other_build;
+        } else {
+          max_build = other_build;
+          min_build = build;
+        }
+
+        let min_build_key = min_build.to_string();
+        let min_build_cluster = build_clusters[&min_build_key].clone();
+        if let Some(max_cluster) = build_clusters.get_mut(*max_build) {
+          max_cluster.extend(min_build_cluster);
+          max_cluster.push(min_build.to_string());
+        }
+
+        build_clusters.remove(&min_build.to_string());
+        completed = true;
+        break;
+      }
+
+      if !completed {
+        break;
+      }
+    }
+
+    println!("build clusters: {:?}", build_clusters);
+  }
 }

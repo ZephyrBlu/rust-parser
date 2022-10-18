@@ -115,7 +115,11 @@ impl ObjectEvent {
     //   game.builds[player_index as usize].push(building_name);
     // }
 
-    if current_gameloop > 0 {
+    if
+      current_gameloop > 0 &&
+      !(building_name.contains("Reactor") || building_name.contains("TechLab")) &&
+      game.builds[player_index as usize].len() < 10
+    {
       game.builds[player_index as usize].push(building_name);
     }
 
