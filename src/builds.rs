@@ -22,7 +22,7 @@ const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
 const BUILD_SEPARATOR: &str = "--";
 
-const MAX_COMPARISON_DIFF: f32 = 10.0;
+const MAX_COMPARISON_DIFF: f32 = 15.0;
 
 impl Builds {
   pub fn new() -> Builds {
@@ -625,55 +625,63 @@ impl Builds {
   }
 
   pub fn generate_clusters(&mut self) {
-    let mut build_clusters: HashMap<String, Vec<String>> = HashMap::new();
-    let mut builds: HashSet<&str> = HashSet::new();
+    let mut build_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
 
-    for (build_comparison, comparison_diff) in &self.build_comparison_information {
+    for build_comparison in self.build_comparison_information.keys().into_iter() {
       let comparison_builds: Vec<&str> = build_comparison.split(BUILD_SEPARATOR).collect();
-      builds.insert(comparison_builds[0]);
-      builds.insert(comparison_builds[1]);
+
+      if !build_clusters.contains_key(comparison_builds[0]) {
+        build_clusters.insert(comparison_builds[0], (vec![], self.builds[comparison_builds[0]]));
+      }
+
+      if !build_clusters.contains_key(comparison_builds[1]) {
+        build_clusters.insert(comparison_builds[1], (vec![], self.builds[comparison_builds[1]]));
+      }
     }
 
-    for build in builds {
-      build_clusters.insert(build.to_string(), vec![]);
-    }
+    let mut cluster_comparisons: Vec<(&str, &str, f32)> = vec![];
 
-    let mut cluster_comparisons: Vec<((&str, &str), &f32)> = vec![];
 
     loop {
+      println!("starting clustering process for {:?} clusters", build_clusters.len());
       cluster_comparisons.clear();
 
-      for (build_comparison, comparison_diff) in &self.build_comparison_information {
-        let comparison_build: Vec<&str> = build_comparison.split(BUILD_SEPARATOR).collect();
-        if
-          build_clusters.contains_key(comparison_build[0]) &&
-          build_clusters.contains_key(comparison_build[1])
-        {
-          // cluster_comparisons.insert(build_comparison, comparison_diff);
-          cluster_comparisons.push(
-            ((comparison_build[0], comparison_build[1]), comparison_diff)
-          );
+      let mut seen_clusters: HashSet<&str> = HashSet::new();
+      for (cluster, _) in &build_clusters {
+        let mut min_comparison_diff = MAX_COMPARISON_DIFF;
+        let mut min_cluster = "";
+        for (other_cluster, _) in &build_clusters {
+          let cluster_comparison_identifier = format!("{cluster}{BUILD_SEPARATOR}{other_cluster}");
+          let cross_cluster_diff = match &self.build_comparison_information.get(&cluster_comparison_identifier) {
+            None => continue, // if there is no comparison it means these are builds from different matchups/races
+            Some(diff) => *diff,
+          };
+
+          if
+            *cross_cluster_diff < MAX_COMPARISON_DIFF &&
+            *cross_cluster_diff < min_comparison_diff &&
+            !(seen_clusters.contains(cluster) || seen_clusters.contains(other_cluster))
+          {
+            min_comparison_diff = *cross_cluster_diff;
+            min_cluster = other_cluster;
+          }
+        }
+
+        if min_comparison_diff < MAX_COMPARISON_DIFF {
+          cluster_comparisons.push((cluster, min_cluster, min_comparison_diff));
+          seen_clusters.insert(cluster);
+          seen_clusters.insert(min_cluster);
         }
       }
 
-      cluster_comparisons.sort_by(
-        |a, b| a.1.partial_cmp(b.1).unwrap()
-      );
-
-      let mut completed = false;
-      for ((build, other_build), comparison_diff) in &cluster_comparisons {
-        // base case, if we have iterated far enough to where the diff is too large break out
-        if **comparison_diff > MAX_COMPARISON_DIFF {
-          break;
-        }
-
-        // cross check cluster builds
+      let mut completed = true;
+      for (build, other_build, _) in &cluster_comparisons {
         let mut cluster_complete_linkage = true;
 
-        for clustered_build in build_clusters.get(*build).unwrap() {
-          let mut comparison_builds = vec![other_build.to_string(), clustered_build.clone()];
+        for clustered_build in &build_clusters[*build].0 {
+          let mut comparison_builds = [other_build, clustered_build.0];
           comparison_builds.sort();
-          let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
+          let build_comparison_identifier = format!("{}{BUILD_SEPARATOR}{}", comparison_builds[0], comparison_builds[1]);
 
           let cross_cluster_diff = &self.build_comparison_information.get(&build_comparison_identifier).unwrap();
           if **cross_cluster_diff > MAX_COMPARISON_DIFF {
@@ -682,10 +690,10 @@ impl Builds {
           }
         }
 
-        for other_clustered_build in build_clusters.get(*other_build).unwrap() {
-          let mut comparison_builds = vec![build.to_string(), other_clustered_build.clone()];
+        for other_clustered_build in &build_clusters[*other_build].0 {
+          let mut comparison_builds = [build, other_clustered_build.0];
           comparison_builds.sort();
-          let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
+          let build_comparison_identifier = format!("{}{BUILD_SEPARATOR}{}", comparison_builds[0], comparison_builds[1]);
 
           let cross_cluster_diff = &self.build_comparison_information.get(&build_comparison_identifier).unwrap();
           if **cross_cluster_diff > MAX_COMPARISON_DIFF {
@@ -711,23 +719,38 @@ impl Builds {
           min_build = build;
         }
 
-        let min_build_key = min_build.to_string();
-        let min_build_cluster = build_clusters[&min_build_key].clone();
+        let min_build_cluster = build_clusters[min_build].clone();
         if let Some(max_cluster) = build_clusters.get_mut(*max_build) {
-          max_cluster.extend(min_build_cluster);
-          max_cluster.push(min_build.to_string());
+          max_cluster.0.extend(min_build_cluster.0);
+          max_cluster.0.push((min_build, min_build_cluster.1));
         }
+        build_clusters.remove(min_build);
 
-        build_clusters.remove(&min_build.to_string());
-        completed = true;
-        break;
+        completed = false;
       }
 
-      if !completed {
+      if completed {
         break;
       }
     }
 
-    println!("build clusters: {:?}", build_clusters);
+    let mut cluster_size = vec![];
+    for (cluster_build, related_builds) in &build_clusters {
+
+      let mut current_cluster_size = related_builds.1 as usize;
+      println!("cluster: {cluster_build}, {}", related_builds.1);
+      for build in &related_builds.0 {
+        println!("    {}, {}", build.0, build.1);
+        current_cluster_size += build.1 as usize;
+      }
+      println!("");
+
+      cluster_size.push(current_cluster_size);
+    }
+    cluster_size.sort();
+    let cluster_total: usize = cluster_size.iter().sum();
+    println!("cluster sizes: {:?}", cluster_size);
+    println!("total games: {:?}", cluster_total);
+    println!("avg cluster size: {:?}", cluster_total as f32 / cluster_size.len() as f32)
   }
 }
