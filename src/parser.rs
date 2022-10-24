@@ -35,7 +35,7 @@ impl<'a> ReplayParser<'a> {
     }
   }
 
-  pub fn parse_replay(&'a self, replay: Parsed) -> Result<ReplaySummary, &'static str> {
+  pub fn parse_replay(&'a self, replay: Parsed, builds: &mut Vec<String>) -> Result<ReplaySummary, &'static str> {
     let tags = replay.tags.clone();
 
     let mut game = Game::new();
@@ -116,7 +116,7 @@ impl<'a> ReplayParser<'a> {
       .unwrap().1;
     let mut map = String::new();
     if let DecoderResult::Blob(value) = raw_map {
-      map = value.clone();
+      map = value.trim_start_matches("[ESL] ").to_string();
     }
 
     let raw_played_at = &replay.player_info
@@ -169,7 +169,10 @@ impl<'a> ReplayParser<'a> {
                 .unwrap().1;
               let mut name = String::new();
               if let DecoderResult::Blob(value) = raw_name {
-                name = value.clone();
+                name = match value.find(">") {
+                  Some(clan_tag_index) => value[clan_tag_index + 1..].to_string(),
+                  None => value.clone(),
+                };
               }
 
               players.push(Player {
@@ -185,9 +188,21 @@ impl<'a> ReplayParser<'a> {
       _other => panic!("Found DecoderResult::{:?}", _other)
     }
 
+    let mut replay_builds: [u16; 2] = [0, 0];
+    for (replay_build_index, build) in game.builds.iter().enumerate() {
+      let joined_build = build.join(",");
+      match builds.iter().position(|seen_build| &joined_build == seen_build) {
+        Some(build_index) => replay_builds[replay_build_index] = build_index as u16,
+        None => {
+          builds.push(joined_build);
+          replay_builds[replay_build_index] = builds.len() as u16 - 1;
+        }
+      }
+    }
+
     let replay_summary: ReplaySummary = HashMap::from([
       ("players", ReplayEntry::Players(players)),
-      ("builds", ReplayEntry::Builds(game.builds)),
+      ("build_mappings", ReplayEntry::Builds(replay_builds)),
       ("winner", ReplayEntry::Winner(winner)),
       ("game_length", ReplayEntry::GameLength(game_length)),
       ("map", ReplayEntry::Map(map)),

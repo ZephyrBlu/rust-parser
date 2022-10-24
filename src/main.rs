@@ -48,7 +48,7 @@ pub enum ReplayEntry<'a> {
   Id(u32),
   ContentHash(String),
   Players(Vec<Player>),
-  Builds(Vec<Vec<String>>),
+  Builds([u16; 2]),
   Winner(u8),
   GameLength(u16),
   Map(String),
@@ -63,7 +63,6 @@ type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
 struct SerializedReplays<'a> {
   #[serde(borrow)]
   replays: Vec<ReplaySummary<'a>>,
-  comparisons: HashMap<u32, &'a f32>,
 }
 
 fn main() {
@@ -79,9 +78,9 @@ fn main() {
   println!("visited {:?} files in {:.2?}", num_replays, now.elapsed());
 
   let replay_summaries: Vec<ReplaySummary> = vec![];
+  let mut replay_builds: Vec<String> = vec![];
   let mut result = SerializedReplays {
     replays: replay_summaries,
-    comparisons: HashMap::new(),
   };
 
   let mut race_index = Index::new();
@@ -102,7 +101,10 @@ fn main() {
       continue;
     }
 
-    let mut replay_summary = match replay_parser.parse_replay(replay.parsed) {
+    let mut replay_summary = match replay_parser.parse_replay(
+      replay.parsed,
+      &mut replay_builds,
+    ) {
       Ok(summary) => summary,
       Err(e) => {
         // println!("Error parsing replay: {e}");
@@ -135,11 +137,12 @@ fn main() {
     }
     matchup.sort();
 
-    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+    if let ReplayEntry::Builds(builds) = replay_summary.get("build_mappings").unwrap() {
       let matchup_prefix = matchup.join(",");
-      for (p_id, player_build) in builds.iter().enumerate() {
+      for (p_id, player_build_index) in builds.iter().enumerate() {
+        let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
         let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_tokens(player_build, token_prefix);
+        build_tokens.generate_tokens(&player_build, token_prefix);
 
         if player_build.len() <= 3 {
           // println!("Build has less than 3 buildings: {:?}", player_build);
@@ -177,9 +180,10 @@ fn main() {
     }
     matchup.sort();
 
-    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+    if let ReplayEntry::Builds(builds) = replay_summary.get("build_mappings").unwrap() {
       let matchup_prefix = matchup.join(",");
-      for (p_id, player_build) in builds.iter().enumerate() {
+      for (p_id, player_build_index) in builds.iter().enumerate() {
+        let player_build: Vec<String> = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
         if player_build.len() <= 3 {
           // println!("Build has less than 3 buildings: {:?}", player_build);
           skipped_builds += 1;
@@ -187,7 +191,7 @@ fn main() {
         }
 
         let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_token_paths(player_build, build_prefix);
+        build_tokens.generate_token_paths(&player_build, build_prefix);
       }
     }
   }
@@ -227,15 +231,15 @@ fn main() {
   // }
   println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
 
-  let mut comparison_mappings: HashMap<u32, &String> = HashMap::new();
-  for (index, (comparison_identifier, comparison_diff)) in build_tokens.build_comparison_information.iter().enumerate() {
-    comparison_mappings.insert(index as u32, comparison_identifier);
-    result.comparisons.insert(index as u32, comparison_diff);
-  }
+  // let mut comparison_mappings: HashMap<u32, &String> = HashMap::new();
+  // for (index, (comparison_identifier, comparison_diff)) in build_tokens.build_comparison_information.iter().enumerate() {
+  //   comparison_mappings.insert(index as u32, comparison_identifier);
+  //   result.comparisons.insert(index as u32, comparison_diff);
+  // }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
-  let replay_output = File::create("../sc2.gg/src/assets/replays.json").unwrap();
+  let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &result);
 
   let mut filtered_build_index = Index::new();
@@ -253,11 +257,22 @@ fn main() {
     // ("build", filtered_build_index),
   ]);
 
-  let index_output = File::create("../sc2.gg/src/assets/indexes.json").unwrap();
+  let index_output = File::create("../sc2.gg/public/data/indexes.json").unwrap();
   serde_json::to_writer(&index_output, &indexes);
 
+  let mut build_mappings: Vec<Vec<String>> = vec![];
+  for build in replay_builds {
+    let split_build = build.split(",").map(|s| s.to_string()).collect();
+    build_mappings.push(split_build);
+  }
+
+  let builds_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
+  serde_json::to_writer(&builds_output, &build_mappings);
+
+  // let mut compressed_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
+
   // let mappings = HashMap::from([
-  //   ("comparisons", comparison_mappings),
+  //   ("clusters", ),
   // ]);
 
   // let mappings_output = File::create("../sc2.gg/src/assets/mappings.json").unwrap();
