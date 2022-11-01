@@ -18,21 +18,27 @@ impl<'a> Index {
     }
   }
 
+  fn to_index_key(key: String) -> String {
+    key.split_whitespace().collect::<Vec<&str>>().join("-")
+  }
+
   pub fn add_id(&'a mut self, value: String, id: u32) {
-    if let Some(references) = self.id_entries.get_mut(&value) {
+    let key = Index::to_index_key(value);
+    if let Some(references) = self.id_entries.get_mut(&key) {
       // TODO: duplicate values could be an issue?
       references.push(id);
     } else {
-      self.id_entries.insert(value, vec![id]);
+      self.id_entries.insert(key, vec![id]);
     }
   }
 
   pub fn add_hash(&'a mut self, value: String, hash: String) {
-    if let Some(references) = self.hash_entries.get_mut(&value) {
+    let key = Index::to_index_key(value);
+    if let Some(references) = self.hash_entries.get_mut(&key) {
       // TODO: duplicate values could be an issue?
       references.push(hash);
     } else {
-      self.hash_entries.insert(value, vec![hash]);
+      self.hash_entries.insert(key, vec![hash]);
     }
   }
 

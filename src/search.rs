@@ -14,9 +14,11 @@ impl Search {
   }
 
   pub fn search(&mut self, term: String, indexes: &Vec<&Index>) {
+    let query_key = term.split_whitespace().collect::<Vec<&str>>().join("-");
+
     for index in indexes {
       if let Some(references) = index.hash_entries.get(&term) {
-        let results_key = format!("{}__{}", index.name, term);
+        let results_key = format!("{}__{}", index.name, query_key);
         self.results
           .entry(results_key)
           .and_modify(|results| results.extend(references.clone()))
