@@ -8,12 +8,14 @@ mod utils;
 mod game;
 mod parser;
 mod builds;
+mod search;
 
 use crate::parser::ReplayParser;
 use crate::replay::Replay;
 use crate::index::Index;
 use crate::utils::visit_dirs;
 use crate::builds::Builds;
+use crate::search::Search;
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -48,7 +50,8 @@ pub enum ReplayEntry<'a> {
   Id(u32),
   ContentHash(String),
   Players(Vec<Player>),
-  Builds([u16; 2]),
+  Builds([Vec<String>; 2]),
+  BuildMappings([u16; 2]),
   Winner(u8),
   GameLength(u16),
   Map(String),
@@ -83,11 +86,11 @@ fn main() {
     replays: replay_summaries,
   };
 
-  let mut race_index = Index::new();
-  let mut player_index = Index::new();
-  let mut metadata_index = Index::new();
-  let mut map_index = Index::new();
-  let mut build_index = Index::new();
+  let mut race_index = Index::new("race");
+  let mut player_index = Index::new("player");
+  let mut metadata_index = Index::new("metadata");
+  let mut map_index = Index::new("map");
+  let mut build_index = Index::new("build");
 
   let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
@@ -115,12 +118,14 @@ fn main() {
     replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
     if let ReplayEntry::Map(map) = replay_summary.get("map").unwrap() {
-      map_index.add(map.clone(), replay_id);
+      map_index.add_id(map.to_lowercase().clone(), replay_id);
+      map_index.add_hash(map.to_lowercase().clone(), content_hash.clone());
     }
 
     if let ReplayEntry::Metadata(metadata) = replay_summary.get("metadata").unwrap() {
       for tag in metadata.split(",") {
-        metadata_index.add(tag.to_string(), replay_id);
+        metadata_index.add_id(tag.to_lowercase().to_string(), replay_id);
+        metadata_index.add_hash(tag.to_lowercase().to_string(), content_hash.clone());
       }
     }
 
@@ -131,13 +136,16 @@ fn main() {
         races.push(player.race.clone());
         matchup.push(player.race.clone());
 
-        race_index.add(player.race.clone(), replay_id as u32);
-        player_index.add(player.name.clone(), replay_id as u32);
+        race_index.add_id(player.race.to_lowercase().clone(), replay_id as u32);
+        race_index.add_hash(player.race.to_lowercase().clone(), content_hash.clone());
+
+        player_index.add_id(player.name.to_lowercase().clone(), replay_id as u32);
+        player_index.add_hash(player.name.to_lowercase().clone(), content_hash.clone());
       }
     }
     matchup.sort();
 
-    if let ReplayEntry::Builds(builds) = replay_summary.get("build_mappings").unwrap() {
+    if let ReplayEntry::BuildMappings(builds) = replay_summary.get("build_mappings").unwrap() {
       let matchup_prefix = matchup.join(",");
       for (p_id, player_build_index) in builds.iter().enumerate() {
         let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
@@ -149,12 +157,12 @@ fn main() {
           continue;
         }
 
-        // println!("Full build: {:?}", player_build);
-        for i in 0..(player_build.len() - 2) {
-          let trigram = &player_build[i..(i + 3)];
-          // println!("Generated trigram: {:?}", trigram);
-          build_index.add(trigram.join(","), replay_id as u32);
-        }
+        // // println!("Full build: {:?}", player_build);
+        // for i in 0..(player_build.len() - 2) {
+        //   let trigram = &player_build[i..(i + 3)];
+        //   // println!("Generated trigram: {:?}", trigram);
+        //   build_index.add(trigram.join(","), replay_id as u32);
+        // }
       }
     }
 
@@ -180,10 +188,9 @@ fn main() {
     }
     matchup.sort();
 
-    if let ReplayEntry::Builds(builds) = replay_summary.get("build_mappings").unwrap() {
+    if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
       let matchup_prefix = matchup.join(",");
-      for (p_id, player_build_index) in builds.iter().enumerate() {
-        let player_build: Vec<String> = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
+      for (p_id, player_build) in builds.iter().enumerate() {
         if player_build.len() <= 3 {
           // println!("Build has less than 3 buildings: {:?}", player_build);
           skipped_builds += 1;
@@ -239,21 +246,54 @@ fn main() {
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
-  let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
-  serde_json::to_writer(&replay_output, &result);
+  // ----------------------------------------------------------------------
 
-  let mut filtered_build_index = Index::new();
-  for (trigram, references) in build_index.entries {
-    if references.len() >= 10 {
-      filtered_build_index.entries.insert(trigram, references);
+  // let queries = [
+    // "protoss",
+    // "terran",
+    // "zerg",
+    // "protoss terran",
+    // "zerg protoss",
+    // "terran zerg",    
+  // ];
+  let indexes = vec![
+    &race_index,
+    &player_index,
+    &map_index,
+    &metadata_index,
+  ];
+
+  let mut queries = vec![];
+  for index in &indexes {
+    for key in index.hash_entries.keys() {
+      queries.push(key.to_lowercase());
     }
   }
 
+  let mut search = Search::new();
+
+  for query in queries {
+    search.search(query, &indexes);
+  }
+
+  let results_output = File::create("../sc2.gg/public/data/computed.json").unwrap();
+  serde_json::to_writer(&results_output, &search.results);
+
+  let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
+  serde_json::to_writer(&replay_output, &result);
+
+  // let mut filtered_build_index = Index::new();
+  // for (trigram, references) in build_index.entries {
+  //   if references.len() >= 10 {
+  //     filtered_build_index.entries.insert(trigram, references);
+  //   }
+  // }
+
   let indexes = HashMap::from([
-    ("race", race_index),
-    ("player", player_index),
-    ("metadata", metadata_index),
-    ("map", map_index),
+    ("race", race_index.hash_entries),
+    ("player", player_index.hash_entries),
+    ("metadata", metadata_index.hash_entries),
+    ("map", map_index.hash_entries),
     // ("build", filtered_build_index),
   ]);
 

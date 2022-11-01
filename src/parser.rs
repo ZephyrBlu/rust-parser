@@ -116,7 +116,16 @@ impl<'a> ReplayParser<'a> {
       .unwrap().1;
     let mut map = String::new();
     if let DecoderResult::Blob(value) = raw_map {
-      map = value.trim_start_matches("[ESL] ").to_string();
+      map = value
+        .trim_start_matches("[M] ")
+        .trim_start_matches("[SO] ")
+        .trim_start_matches("[ESL] ")
+        .trim_start_matches("[GSL] ")
+        .trim_start_matches("[TLMC14] ")
+        .trim_start_matches("[TLMC15] ")
+        .trim_start_matches("[TLMC16] ")
+        .trim_end_matches(" LE")
+        .to_string();
     }
 
     let raw_played_at = &replay.player_info
@@ -188,21 +197,25 @@ impl<'a> ReplayParser<'a> {
       _other => panic!("Found DecoderResult::{:?}", _other)
     }
 
-    let mut replay_builds: [u16; 2] = [0, 0];
+    let mut replay_build_mappings: [u16; 2] = [0, 0];
+    let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
     for (replay_build_index, build) in game.builds.iter().enumerate() {
+      replay_builds[replay_build_index] = build.clone();
+      
       let joined_build = build.join(",");
       match builds.iter().position(|seen_build| &joined_build == seen_build) {
-        Some(build_index) => replay_builds[replay_build_index] = build_index as u16,
+        Some(build_index) => replay_build_mappings[replay_build_index] = build_index as u16,
         None => {
           builds.push(joined_build);
-          replay_builds[replay_build_index] = builds.len() as u16 - 1;
+          replay_build_mappings[replay_build_index] = builds.len() as u16 - 1;
         }
       }
     }
 
     let replay_summary: ReplaySummary = HashMap::from([
       ("players", ReplayEntry::Players(players)),
-      ("build_mappings", ReplayEntry::Builds(replay_builds)),
+      ("builds", ReplayEntry::Builds(replay_builds)),
+      ("build_mappings", ReplayEntry::BuildMappings(replay_build_mappings)),
       ("winner", ReplayEntry::Winner(winner)),
       ("game_length", ReplayEntry::GameLength(game_length)),
       ("map", ReplayEntry::Map(map)),
