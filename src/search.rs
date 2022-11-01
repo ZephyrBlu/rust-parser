@@ -3,7 +3,7 @@ use crate::index::Index;
 use std::collections::{HashMap, HashSet};
 
 pub struct Search {
-  pub results: HashMap<String, HashSet<String>>,
+  pub results: HashMap<String, HashSet<u32>>,
 }
 
 impl Search {
@@ -17,7 +17,7 @@ impl Search {
     let query_key = term.split_whitespace().collect::<Vec<&str>>().join("-");
 
     for index in indexes {
-      if let Some(references) = index.hash_entries.get(&term) {
+      if let Some(references) = index.id_entries.get(&term) {
         let results_key = format!("{}__{}", index.name, query_key);
         self.results
           .entry(results_key)

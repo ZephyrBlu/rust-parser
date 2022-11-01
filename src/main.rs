@@ -276,8 +276,19 @@ fn main() {
     search.search(query, &indexes);
   }
 
+  let mut replay_search_results: HashMap<&String, Vec<&ReplaySummary>> = HashMap::new();
+  for (query_key, references) in &search.results {
+    for id in references {
+      let replay = &result.replays[*id as usize];
+      replay_search_results
+        .entry(query_key)
+        .and_modify(|references| references.push(replay))
+        .or_insert(vec![replay]);
+    }
+  }
+
   let results_output = File::create("../sc2.gg/public/data/computed.json").unwrap();
-  serde_json::to_writer(&results_output, &search.results);
+  serde_json::to_writer(&results_output, &replay_search_results);
 
   let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &result);
