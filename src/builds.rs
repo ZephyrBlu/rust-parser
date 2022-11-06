@@ -404,7 +404,6 @@ impl Builds {
         other_build_low_index,
         other_build_high_index,
       );
-      // println!("longest match {:?}", longest_match);
       let (build_match_index, other_build_match_index, match_length) = longest_match;
 
       if match_length != 0 {
@@ -474,7 +473,7 @@ impl Builds {
   }
 
   pub fn compare_builds(&mut self) {
-    let mut missing_buildings: HashMap<String, i32> = HashMap::new();
+    let mut missing_buildings: HashMap<String, u8> = HashMap::new();
     for (joined_build, _) in &self.builds {
       for (joined_other_build, _) in &self.builds {
         // skip when we encounter the same game
@@ -521,8 +520,6 @@ impl Builds {
         comparison_builds.sort();
         let build_comparison_identifier = comparison_builds.join(BUILD_SEPARATOR);
 
-        // println!("comparing builds\n{:?}\n{:?}", joined_build, joined_other_build);
-
         // we already have information on this build comparison
         if self
           .build_comparison_information
@@ -550,16 +547,15 @@ impl Builds {
           }
         }
 
-        build_missing_ranges.push(build_position..min(build.len(), 11) as u8);
-        other_build_missing_ranges
-          .push(other_build_position..min(other_build.len(), 11) as u8);
+        build_missing_ranges.push(build_position..build.len() as u8);
+        other_build_missing_ranges.push(other_build_position..other_build.len() as u8);
 
         for missing_range in build_missing_ranges {
           for idx in missing_range {
             missing_buildings
               .entry(build[idx as usize].clone())
-              .and_modify(|count| *count += 1)
-              .or_insert(1);
+              .and_modify(|position| *position = min(idx, *position))
+              .or_insert(idx);
           }
         }
 
@@ -567,20 +563,16 @@ impl Builds {
           for idx in missing_range {
             missing_buildings
               .entry(other_build[idx as usize].clone())
-              .and_modify(|count| *count -= 1)
-              .or_insert(-1);
+              .and_modify(|position| *position = min(idx, *position))
+              .or_insert(idx);
           }
         }
-
-        if build_comparison_identifier == "Protoss-Protoss,Zerg__Gateway,Nexus,CyberneticsCore,Stargate,Gateway,Nexus,Forge,TwilightCouncil,RoboticsFacility,Gateway,Gateway,Gateway,Gateway,Gateway,Gateway--Protoss-Protoss,Zerg__Gateway,Nexus,CyberneticsCore,Stargate,Gateway,Nexus,TwilightCouncil,Forge,RoboticsFacility,Gateway,Gateway,Gateway,Gateway,Gateway,Gateway" {
-      println!("missing buildings {:?}", missing_buildings);
-    }
 
         // ---
 
         let mut match_information_difference = 0.0;
 
-        for (building, count) in &missing_buildings {
+        for (building, position) in &missing_buildings {
           let token_identifier = format!("{build_prefix}{SECTION_SEPARATOR}{building}{SECTION_SEPARATOR}{TOKEN_TERMINATOR}");
 
           if !self.probability.contains_key(&token_identifier) {
@@ -588,13 +580,13 @@ impl Builds {
           }
 
           let building_information = -self.probability[&token_identifier].log2();
-
-          let tf_idf = building_information * count.abs() as f32;
+          let position_multiplier = if *position >= 10 {
+            0.0
+          } else {
+            2.0 * ((10 - position) as f32 / 10.0)
+          };
+          let tf_idf = building_information * position_multiplier;
           match_information_difference += tf_idf;
-
-          if build_comparison_identifier == "Protoss-Protoss,Zerg__Gateway,Nexus,CyberneticsCore,Stargate,Gateway,Nexus,Forge,TwilightCouncil,RoboticsFacility,Gateway,Gateway,Gateway,Gateway,Gateway,Gateway--Protoss-Protoss,Zerg__Gateway,Nexus,CyberneticsCore,Stargate,Gateway,Nexus,TwilightCouncil,Forge,RoboticsFacility,Gateway,Gateway,Gateway,Gateway,Gateway,Gateway" {
-      println!("tf-idf for {tf_idf} {token_identifier} ({count}x {building_information})");
-      }
         }
 
         let rounded_information_difference = if
@@ -681,10 +673,9 @@ impl Builds {
         }
       }
 
-      all_cluster_comparisons.sort_by(|a, b| {
-        a.2.partial_cmp(&b.2)
-          .expect("cluster comparisons should be floats")
-      });
+      all_cluster_comparisons.sort_by(|a, b|
+        a.2.partial_cmp(&b.2).expect("cluster comparisons should be floats")
+      );
       for (cluster, other_cluster, cross_cluster_diff) in &all_cluster_comparisons {
         if !seen_clusters.contains(cluster) && !seen_clusters.contains(other_cluster) {
           optimal_cluster_comparisons.push((
