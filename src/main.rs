@@ -198,7 +198,7 @@ fn main() {
         }
 
         let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_token_paths(&player_build, build_prefix);
+        // build_tokens.generate_token_paths(&player_build, build_prefix);
       }
     }
   }
@@ -210,13 +210,9 @@ fn main() {
         .partial_cmp(&b.1)
         .expect("path probabilities should be floats"));
 
-  let mut set = HashSet::new();
-  for (path, _, _) in &build_tokens.token_paths {
-    set.insert(path);
-  }
   println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
   println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
-  println!("total paths: {:?}, unique paths: {:?}", build_tokens.token_paths.len(), set.len());
+  println!("total paths: {:?}", build_tokens.token_paths.len());
 
   println!("comparing builds");
   build_tokens.compare_builds();
@@ -293,6 +289,21 @@ fn main() {
   let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &result);
 
+  let build_comparisons_output = File::create("../sc2.gg/public/data/comparisons.json").unwrap();
+  serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
+
+  let token_probability_output = File::create("../sc2.gg/public/data/probability.json").unwrap();
+  serde_json::to_writer(&token_probability_output, &build_tokens.probability);
+
+  let build_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
+  serde_json::to_writer(&build_output, &build_tokens.builds);
+
+  let cluster_output = File::create("../sc2.gg/public/data/clusters.json").unwrap();
+  serde_json::to_writer(&cluster_output, &build_tokens.build_clusters);
+
+  let build_token_output = File::create("../sc2.gg/public/data/tokens.json").unwrap();
+  serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);
+
   // let mut filtered_build_index = Index::new();
   // for (trigram, references) in build_index.entries {
   //   if references.len() >= 10 {
@@ -308,17 +319,17 @@ fn main() {
     // ("build", filtered_build_index),
   ]);
 
-  let index_output = File::create("../sc2.gg/public/data/indexes.json").unwrap();
-  serde_json::to_writer(&index_output, &indexes);
+  // let index_output = File::create("../sc2.gg/public/data/indexes.json").unwrap();
+  // serde_json::to_writer(&index_output, &indexes);
 
-  let mut build_mappings: Vec<Vec<String>> = vec![];
-  for build in replay_builds {
-    let split_build = build.split(",").map(|s| s.to_string()).collect();
-    build_mappings.push(split_build);
-  }
+  // let mut build_mappings: Vec<Vec<String>> = vec![];
+  // for build in replay_builds {
+  //   let split_build = build.split(",").map(|s| s.to_string()).collect();
+  //   build_mappings.push(split_build);
+  // }
 
-  let builds_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
-  serde_json::to_writer(&builds_output, &build_mappings);
+  // let builds_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
+  // serde_json::to_writer(&builds_output, &build_mappings);
 
   // let mut compressed_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
 

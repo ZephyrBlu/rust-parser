@@ -3,13 +3,13 @@ use crate::replay::Event;
 use crate::decoders::DecoderResult;
 
 // doesn't include supply structures, gas collectors and support structures
-const BUILDINGS: [&str; 42] = [
+const BUILDINGS: [&str; 41] = [
   // Protoss
   "Nexus",
   "Gateway",
   "Forge",
   "CyberneticsCore",
-  "PhotonCannon", // we'll see about this one
+  // "PhotonCannon", // we'll see about this one
   "RoboticsFacility",
   "Stargate",
   "TwilightCouncil",
@@ -54,6 +54,8 @@ const BUILDINGS: [&str; 42] = [
 ];
 
 pub struct ObjectEvent;
+
+const MAX_BUILD_LENGTH: u8 = 15;
 
 impl ObjectEvent {
   pub fn new(game: &mut Game, event: &Event) -> Result<(), &'static str> {
@@ -118,7 +120,7 @@ impl ObjectEvent {
     if
       current_gameloop > 0 &&
       !(building_name.contains("Reactor") || building_name.contains("TechLab")) &&
-      game.builds[player_index as usize].len() < 10
+      game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize
     {
       game.builds[player_index as usize].push(building_name);
     }
