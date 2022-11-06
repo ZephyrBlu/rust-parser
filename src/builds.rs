@@ -11,6 +11,7 @@ use serde::Serialize;
 pub struct ClusterBuild {
   build: String,
   count: u16,
+  diff: f32,
 }
 
 #[derive(Serialize, Clone)]
@@ -46,7 +47,7 @@ const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
 const BUILD_SEPARATOR: &str = "--";
 
-const MAX_COMPARISON_DIFF: f32 = 15.0;
+const MAX_COMPARISON_DIFF: f32 = 20.0;
 
 impl Builds {
   pub fn new() -> Builds {
@@ -596,8 +597,14 @@ impl Builds {
       }
         }
 
-        let rounded_information_difference =
-          (match_information_difference * 100.0).round() / 100.0;
+        let rounded_information_difference = if
+          joined_build.contains(joined_other_build) ||
+          joined_other_build.contains(joined_build)
+        {
+          0.0
+        } else {
+          (match_information_difference * 100.0).round() / 100.0
+        };
 
         self.build_comparison_information
           .insert(build_comparison_identifier, rounded_information_difference);
@@ -615,15 +622,16 @@ impl Builds {
         self.build_clusters.insert(
           comparison_builds[0].to_string(),
           Cluster {
-            build: ClusterBuild {
-              build: comparison_builds[0].to_string(),
-              count: self.builds[comparison_builds[0]],
+              build: ClusterBuild {
+                build: comparison_builds[0].to_string(),
+                count: self.builds[comparison_builds[0]],
+                diff: 0.0,
+              },
+              cluster: BuildList {
+                total_count: 0,
+                builds: vec![],
+              },
             },
-            cluster: BuildList {
-              total_count: 0,
-              builds: vec![],
-            },
-          },
         );
       }
 
@@ -631,15 +639,16 @@ impl Builds {
         self.build_clusters.insert(
           comparison_builds[1].to_string(),
           Cluster {
-            build: ClusterBuild {
-              build: comparison_builds[1].to_string(),
-              count: self.builds[comparison_builds[0]],
+              build: ClusterBuild {
+                build: comparison_builds[1].to_string(),
+                count: self.builds[comparison_builds[1]],
+                diff: 0.0,
+              },
+              cluster: BuildList {
+                total_count: 0,
+                builds: vec![],
+              },
             },
-            cluster: BuildList {
-              total_count: 0,
-              builds: vec![],
-            },
-          },
         );
       }
     }
@@ -672,10 +681,6 @@ impl Builds {
         }
       }
 
-      // generate cluster comparisons for all clusters, then order by diff smallest to largest
-      // iterate through comparisons and use the most optimal pairing for each cluster
-      // ensures optimal merging and stable clustering
-
       all_cluster_comparisons.sort_by(|a, b| {
         a.2.partial_cmp(&b.2)
           .expect("cluster comparisons should be floats")
@@ -704,11 +709,8 @@ impl Builds {
             comparison_builds[0], comparison_builds[1]
           );
 
-          let cross_cluster_diff = &self
-            .build_comparison_information
-            .get(&build_comparison_identifier)
-            .unwrap();
-          if **cross_cluster_diff > MAX_COMPARISON_DIFF {
+          let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
+          if *cross_cluster_diff > MAX_COMPARISON_DIFF {
             cluster_complete_linkage = false;
             break;
           }
@@ -719,14 +721,12 @@ impl Builds {
           comparison_builds.sort();
           let build_comparison_identifier = format!(
             "{}{BUILD_SEPARATOR}{}",
-            comparison_builds[0], comparison_builds[1]
+            comparison_builds[0],
+            comparison_builds[1],
           );
 
-          let cross_cluster_diff = &self
-            .build_comparison_information
-            .get(&build_comparison_identifier)
-            .unwrap();
-          if **cross_cluster_diff > MAX_COMPARISON_DIFF {
+          let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
+          if *cross_cluster_diff > MAX_COMPARISON_DIFF {
             cluster_complete_linkage = false;
             break;
           }
@@ -749,15 +749,39 @@ impl Builds {
           min_build = build;
         }
 
-        let min_build_cluster = self.build_clusters[min_build].clone();
+        let mut min_build_cluster = self.build_clusters[min_build].clone();
         if let Some(max_cluster) = self.build_clusters.get_mut(max_build) {
-          max_cluster
-            .cluster
-            .builds
-            .extend(min_build_cluster.cluster.builds);
+          // update min cluster diffs to max cluster
+          for build in &mut min_build_cluster.cluster.builds {
+            let mut comparison_builds = [max_build, &build.build];
+            comparison_builds.sort();
+
+            let build_comparison_identifier = format!(
+              "{}{BUILD_SEPARATOR}{}",
+              comparison_builds[0],
+              comparison_builds[1],
+            );
+            let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
+
+            build.diff = *cross_cluster_diff;
+          }
+
+          max_cluster.cluster.builds.extend(min_build_cluster.cluster.builds);
+
+          let mut comparison_builds = [max_build, min_build];
+          comparison_builds.sort();
+
+          let build_comparison_identifier = format!(
+            "{}{BUILD_SEPARATOR}{}",
+            comparison_builds[0],
+            comparison_builds[1],
+          );
+          let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
+
           max_cluster.cluster.builds.push(ClusterBuild {
             build: min_build.to_string(),
             count: min_build_cluster.build.count,
+            diff: *cross_cluster_diff,
           });
         }
         self.build_clusters.remove(&min_build.to_string());
@@ -766,6 +790,15 @@ impl Builds {
       }
 
       if completed {
+        for (_, cluster) in &mut self.build_clusters {
+          cluster.cluster.total_count = 0;
+          for build in &cluster.cluster.builds {
+            cluster.cluster.total_count += build.count;
+          }
+          cluster.cluster.builds.sort_by(|a, b|
+            a.diff.partial_cmp(&b.diff).expect("build diff should be a float")
+          );
+        }
         break;
       }
 
