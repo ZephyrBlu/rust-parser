@@ -73,7 +73,7 @@ fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -301,6 +301,9 @@ fn main() {
 
   let cluster_output = File::create("../sc2.gg/public/data/clusters.json").unwrap();
   serde_json::to_writer(&cluster_output, &build_tokens.build_clusters);
+
+  let tree_output = File::create("../sc2.gg/public/data/build_tree.json").unwrap();
+  serde_json::to_writer(&tree_output, &build_tokens.build_tree);
 
   let build_token_output = File::create("../sc2.gg/public/data/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);

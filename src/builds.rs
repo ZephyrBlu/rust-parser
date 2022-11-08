@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
 
-use crate::cluster::{Cluster, ClusterTree,  ClusterTreeNode, ClusterBuild, BuildList, RadixTree};
+use crate::cluster::{Cluster, ClusterBuild, BuildList, RadixTree};
 
 pub struct Builds {
   pub builds: HashMap<String, u16>,
@@ -18,6 +18,7 @@ pub struct Builds {
   pub skipped_builds: Vec<String>,
   pub build_comparison_information: HashMap<String, f32>,
   pub build_clusters: HashMap<String, Cluster>,
+  pub build_tree: HashMap<String, RadixTree>,
 }
 
 const MAX_TOKEN_SIZE: usize = 5;
@@ -43,6 +44,7 @@ impl Builds {
       skipped_builds: vec![],
       build_comparison_information: HashMap::new(),
       build_clusters: HashMap::new(),
+      build_tree: HashMap::new(),
     }
   }
 
@@ -757,11 +759,16 @@ impl Builds {
       }
 
       if completed {
+        let mut builds: Vec<Cluster> = vec![];
+
         for (_, cluster) in &mut self.build_clusters {
           cluster.cluster.total_count = 0;
           for build in &cluster.cluster.builds {
             cluster.cluster.total_count += build.count;
           }
+
+          builds.push(cluster.clone());
+
           cluster.cluster.builds.sort_by(|a, b|
             a.diff.partial_cmp(&b.diff).expect("build diff should be a float")
           );
@@ -772,13 +779,34 @@ impl Builds {
           cluster.matchup = matchup.to_string();
           cluster.tree.insert(&root_buildings.to_string(), cluster.build.count);
 
-          for build in &cluster.cluster.builds {
+          for (idx, build) in cluster.cluster.builds.iter().enumerate() {
+            if idx >= 25 {
+              break;
+            }
             let deconstructed_build: Vec<&str> = build.build.split(SECTION_SEPARATOR).collect();
             let buildings = deconstructed_build[1];
             cluster.tree.insert(&buildings.to_string(), build.count);
           }
           // Builds::generate_build_tree(cluster);
         }
+
+        builds.sort_by(|a, b|
+          b.build.count.cmp(&a.build.count)
+        );
+        for (idx, cluster) in builds.iter().enumerate() {
+          if idx >= 25 {
+            break;
+          }
+          let deconstructed_root_build: Vec<&str> = cluster.build.build.split(SECTION_SEPARATOR).collect();
+          let matchup = deconstructed_root_build[0];
+          let root_buildings = deconstructed_root_build[1];
+
+          self.build_tree
+            .entry(matchup.to_string())
+            .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.count))
+            .or_insert(RadixTree::new());
+        }
+
         break;
       }
 
