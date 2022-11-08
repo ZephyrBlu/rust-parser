@@ -76,4 +76,17 @@ The purpose of this reduction is to reduce the weight of buildings later on in t
   - If we already have a record for this build, continue (Once for (inner, outer) and (outer, inner))
   - Find sequence matches between builds, then use to calculate missing buildings
   - Calculate tf-idf for missing buildings and save total information difference as a build comparison
-- 
+
+## Radix Tree
+
+Insertion cases:
+- New build subset of build in existing node
+- New build superset of build in existing node
+- New build shares common ancestor with build in existing node
+
+- If new build contains node label, walk tree
+  - If new build minus node label contains node child label, walk tree
+  - Base case = new build mins doesn't contain node child label, insert new build minus label as node at level
+- If node label contains new build, split node label, rename node to build and create new node for node label extra
+- Else, iterate through both builds to find matching section
+  - Continue until mismatch, then create node + 2 children

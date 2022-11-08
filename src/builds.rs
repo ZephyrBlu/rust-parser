@@ -5,26 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
 
-use serde::Serialize;
-
-#[derive(Serialize, Clone)]
-pub struct ClusterBuild {
-  build: String,
-  count: u16,
-  diff: f32,
-}
-
-#[derive(Serialize, Clone)]
-pub struct BuildList {
-  total_count: u16,
-  builds: Vec<ClusterBuild>,
-}
-
-#[derive(Serialize, Clone)]
-pub struct Cluster {
-  build: ClusterBuild,
-  cluster: BuildList,
-}
+use crate::cluster::{Cluster, ClusterTree,  ClusterTreeNode, ClusterBuild, BuildList, RadixTree};
 
 pub struct Builds {
   pub builds: HashMap<String, u16>,
@@ -47,7 +28,7 @@ const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
 const BUILD_SEPARATOR: &str = "--";
 
-const MAX_COMPARISON_DIFF: f32 = 20.0;
+const MAX_COMPARISON_DIFF: f32 = 15.0;
 
 impl Builds {
   pub fn new() -> Builds {
@@ -589,17 +570,8 @@ impl Builds {
           match_information_difference += tf_idf;
         }
 
-        let rounded_information_difference = if
-          joined_build.contains(joined_other_build) ||
-          joined_other_build.contains(joined_build)
-        {
-          0.0
-        } else {
-          (match_information_difference * 100.0).round() / 100.0
-        };
-
-        self.build_comparison_information
-          .insert(build_comparison_identifier, rounded_information_difference);
+        let rounded_information_difference = (match_information_difference * 100.0).round() / 100.0;
+        self.build_comparison_information.insert(build_comparison_identifier, rounded_information_difference);
 
         missing_buildings.clear();
       }
@@ -623,6 +595,8 @@ impl Builds {
                 total_count: 0,
                 builds: vec![],
               },
+              matchup: String::new(),
+              tree: RadixTree::new(),
             },
         );
       }
@@ -640,6 +614,8 @@ impl Builds {
                 total_count: 0,
                 builds: vec![],
               },
+              matchup: String::new(),
+              tree: RadixTree::new(),
             },
         );
       }
@@ -789,6 +765,19 @@ impl Builds {
           cluster.cluster.builds.sort_by(|a, b|
             a.diff.partial_cmp(&b.diff).expect("build diff should be a float")
           );
+
+          let deconstructed_root_build: Vec<&str> = cluster.build.build.split(SECTION_SEPARATOR).collect();
+          let matchup = deconstructed_root_build[0];
+          let root_buildings = deconstructed_root_build[1];
+          cluster.matchup = matchup.to_string();
+          cluster.tree.insert(&root_buildings.to_string(), cluster.build.count);
+
+          for build in &cluster.cluster.builds {
+            let deconstructed_build: Vec<&str> = build.build.split(SECTION_SEPARATOR).collect();
+            let buildings = deconstructed_build[1];
+            cluster.tree.insert(&buildings.to_string(), build.count);
+          }
+          // Builds::generate_build_tree(cluster);
         }
         break;
       }
