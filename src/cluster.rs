@@ -77,8 +77,9 @@ impl Node {
     let current_node_label = &buildings[0..idx];
     let new_node_label = &buildings[idx..];
 
-    let new_node = Node::new(new_node_label.join(","), self.value);
-    self.children.push(new_node);
+    let mut new_node = Node::new(new_node_label.join(","), self.value);
+    new_node.children = self.children.clone();
+    self.children = vec![new_node];
 
     self.label = current_node_label.join(",");
     self.value = 0;
