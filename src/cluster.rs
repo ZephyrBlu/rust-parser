@@ -1,3 +1,4 @@
+use std::thread::current;
 use std::vec;
 use std::cmp::{min, max};
 
@@ -52,51 +53,6 @@ impl Node {
     }
   }
 
-  pub fn walk(&mut self, build_fragment: &String, count: u16) {
-    let mut inserted = false;
-    for child in &mut self.children {
-      let match_length = child.match_key(&build_fragment);
-      if match_length == 0 {
-        continue;
-      }
-
-      let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
-
-      if match_length == node_build_length {
-        let buildings: Vec<&str> = build_fragment.split(",").collect();
-        let next_fragment = buildings[match_length..].join(",");
-        child.walk(&next_fragment, count);
-        inserted = true;
-        break;
-      }
-
-      if match_length < node_build_length {
-        child.split_at(match_length);
-
-        let buildings: Vec<&str> = build_fragment.split(",").collect();
-        if buildings.len() > match_length {
-          let remaining_fragment = buildings[match_length..].join(",");
-          let new_node = Node::new(remaining_fragment, count);
-          child.children.push(new_node);
-        } else {
-          child.value = count;
-        }
-
-        inserted = true;
-        break;
-      }
-
-      if match_length > node_build_length {
-        unreachable!("match length cannot be larger than node length");
-      }
-    }
-
-    if !inserted {
-      let new_node = Node::new(build_fragment.to_string(), count);
-      self.children.push(new_node);
-    }
-  }
-
   pub fn match_key(&self, build: &String) -> usize {
     let key_buildings: Vec<&str> = build.split(",").collect();
     let node_buildings: Vec<&str> = self.label.split(",").collect();
@@ -127,6 +83,58 @@ impl Node {
     self.label = current_node_label.join(",");
     self.value = 0;
   }
+
+  pub fn walk(&mut self, build_fragment: &String, count: u16) {
+    let mut inserted = false;
+    for child in &mut self.children {
+      let match_length = child.match_key(&build_fragment);
+      if match_length == 0 {
+        continue;
+      }
+
+      let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
+
+      if match_length == node_build_length {
+        let buildings: Vec<&str> = build_fragment.split(",").collect();
+        let next_fragment = buildings[match_length..].join(",");
+
+        if child.children.len() != 0 {
+          child.walk(&next_fragment, count);
+        } else {
+          let new_node = Node::new(next_fragment, count);
+          child.children.push(new_node);
+        }
+
+        inserted = true;
+        break;
+      }
+
+      if match_length < node_build_length {
+        child.split_at(match_length);
+
+        let buildings: Vec<&str> = build_fragment.split(",").collect();
+        if buildings.len() > match_length {
+          let remaining_fragment = buildings[match_length..].join(",");
+          let new_node = Node::new(remaining_fragment, count);
+          child.children.push(new_node);
+        } else {
+          child.value = count;
+        }
+
+        inserted = true;
+        break;
+      }
+
+      if match_length > node_build_length {
+        unreachable!("match length cannot be larger than node length");
+      }
+    }
+
+    if !inserted {
+      let new_node = Node::new(build_fragment.to_string(), count);
+      self.children.push(new_node);
+    }
+  }
 }
 
 #[derive(Serialize, Clone)]
@@ -152,11 +160,16 @@ impl RadixTree {
       let node_build_length = node.label.split(",").collect::<Vec<&str>>().len();
 
       if match_length == node_build_length {
-        println!("match length {match_length} for:\n{:?}\n{:?}", node.label, build);
         let buildings: Vec<&str> = build.split(",").collect();
         let build_fragment = buildings[match_length..].join(",");
-        println!("new fragment {build_fragment}\n");
-        node.walk(&build_fragment, count);
+
+        if node.children.len() != 0 {
+          node.walk(&build_fragment, count);
+        } else {
+          let new_node = Node::new(build_fragment, count);
+          node.children.push(new_node);
+        }
+
         inserted = true;
         break;
       }
