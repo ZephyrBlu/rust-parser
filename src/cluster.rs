@@ -1,6 +1,5 @@
-use std::thread::current;
-use std::vec;
-use std::cmp::{min, max};
+use std::cmp::{min};
+use std::mem::swap;
 
 use serde::Serialize;
 
@@ -78,8 +77,8 @@ impl Node {
     let new_node_label = &buildings[idx..];
 
     let mut new_node = Node::new(new_node_label.join(","), self.value);
-    new_node.children = self.children.clone();
-    self.children = vec![new_node];
+    swap(&mut new_node.children, &mut self.children);
+    self.children.push(new_node);
 
     self.label = current_node_label.join(",");
     self.value = 0;
@@ -148,6 +147,12 @@ impl RadixTree {
     RadixTree {
       root: vec![],
     }
+  }
+
+  pub fn from(build: &String, count: u16) -> RadixTree {
+    let mut tree = RadixTree::new();
+    tree.insert(build, count);
+    tree
   }
 
   pub fn insert(&mut self, build: &String, count: u16) {

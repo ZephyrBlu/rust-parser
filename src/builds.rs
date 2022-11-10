@@ -804,7 +804,7 @@ impl Builds {
           self.build_tree
             .entry(matchup.to_string())
             .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.count))
-            .or_insert(RadixTree::new());
+            .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.count));
         }
 
         break;
