@@ -793,18 +793,27 @@ impl Builds {
         builds.sort_by(|a, b|
           b.build.count.cmp(&a.build.count)
         );
-        for (idx, cluster) in builds.iter().enumerate() {
-          if idx >= 25 {
-            break;
-          }
+
+        let mut matchup_clusters: HashMap<&str, u8> = HashMap::new();
+        for cluster in builds.iter() {
           let deconstructed_root_build: Vec<&str> = cluster.build.build.split(SECTION_SEPARATOR).collect();
           let matchup = deconstructed_root_build[0];
           let root_buildings = deconstructed_root_build[1];
+
+          if let Some(count) = matchup_clusters.get(&matchup) {
+            if *count >= 25 {
+              continue;
+            }
+          }
 
           self.build_tree
             .entry(matchup.to_string())
             .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.count))
             .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.count));
+          matchup_clusters
+            .entry(matchup)
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
         }
 
         break;

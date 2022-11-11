@@ -41,6 +41,7 @@ pub struct Node {
   pub label: String,
   pub children: Vec<Node>,
   pub value: u16,
+  pub total: u16,
 }
 
 impl Node {
@@ -49,6 +50,7 @@ impl Node {
       label,
       children: vec![],
       value,
+      total: value,
     }
   }
 
@@ -103,6 +105,7 @@ impl Node {
         } else {
           let new_node = Node::new(next_fragment, count);
           child.children.push(new_node);
+          child.total += count;
         }
 
         inserted = true;
@@ -120,6 +123,7 @@ impl Node {
         } else {
           child.value = count;
         }
+        child.total += count;
 
         inserted = true;
         break;
@@ -139,13 +143,13 @@ impl Node {
 
 #[derive(Serialize, Clone)]
 pub struct RadixTree {
-  pub root: Vec<Node>,
+  pub root: Node,
 }
 
 impl RadixTree {
   pub fn new() -> RadixTree {
     RadixTree {
-      root: vec![],
+      root: Node::new(String::from("ROOT"), 0),
     }
   }
 
@@ -156,55 +160,7 @@ impl RadixTree {
   }
 
   pub fn insert(&mut self, build: &String, count: u16) {
-    let mut inserted = false;
-    for node in &mut self.root {
-      let match_length = node.match_key(&build);
-      if match_length == 0 {
-        continue;
-      }
-
-      let node_build_length = node.label.split(",").collect::<Vec<&str>>().len();
-
-      if match_length == node_build_length {
-        let buildings: Vec<&str> = build.split(",").collect();
-        let build_fragment = buildings[match_length..].join(",");
-
-        if node.children.len() != 0 {
-          node.walk(&build_fragment, count);
-        } else {
-          let new_node = Node::new(build_fragment, count);
-          node.children.push(new_node);
-        }
-
-        inserted = true;
-        break;
-      }
-
-      if match_length < node_build_length {
-        node.split_at(match_length);
-
-        let buildings: Vec<&str> = build.split(",").collect();
-        if buildings.len() > match_length {
-          let remaining_fragment = buildings[match_length..].join(",");
-          let new_node = Node::new(remaining_fragment, count);
-          node.children.push(new_node);
-        } else {
-          node.value = count;
-        }
-
-        inserted = true;
-        break;
-      }
-
-      if match_length > node_build_length {
-        unreachable!("match length cannot be larger than node length");
-      }
-    }
-
-    if !inserted {
-      let new_root = Node::new(build.to_string(), count);
-      self.root.push(new_root);
-    }
+    self.root.walk(build, count);
   }
 }
 
