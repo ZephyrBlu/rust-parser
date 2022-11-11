@@ -54,7 +54,7 @@ impl Node {
     }
   }
 
-  pub fn match_key(&self, build: &String) -> usize {
+  pub fn match_key(&self, build: &str) -> usize {
     let key_buildings: Vec<&str> = build.split(",").collect();
     let node_buildings: Vec<&str> = self.label.split(",").collect();
 
@@ -80,13 +80,15 @@ impl Node {
 
     let mut new_node = Node::new(new_node_label.join(","), self.value);
     swap(&mut new_node.children, &mut self.children);
+
     self.children.push(new_node);
+    self.children.sort_by(|a, b| b.total.cmp(&a.total));
 
     self.label = current_node_label.join(",");
     self.value = 0;
   }
 
-  pub fn walk(&mut self, build_fragment: &String, count: u16) {
+  pub fn walk(&mut self, build_fragment: &str, count: u16) {
     let mut inserted = false;
     for child in &mut self.children {
       let match_length = child.match_key(&build_fragment);
@@ -105,6 +107,7 @@ impl Node {
         } else {
           let new_node = Node::new(next_fragment, count);
           child.children.push(new_node);
+          child.children.sort_by(|a, b| b.total.cmp(&a.total));
           child.total += count;
         }
 
@@ -120,6 +123,7 @@ impl Node {
           let remaining_fragment = buildings[match_length..].join(",");
           let new_node = Node::new(remaining_fragment, count);
           child.children.push(new_node);
+          child.children.sort_by(|a, b| b.total.cmp(&a.total));
         } else {
           child.value = count;
         }
@@ -137,6 +141,8 @@ impl Node {
     if !inserted {
       let new_node = Node::new(build_fragment.to_string(), count);
       self.children.push(new_node);
+      self.children.sort_by(|a, b| b.total.cmp(&a.total));
+      self.total += count;
     }
   }
 }
@@ -153,14 +159,16 @@ impl RadixTree {
     }
   }
 
-  pub fn from(build: &String, count: u16) -> RadixTree {
+  pub fn from(build: &str, count: u16) -> RadixTree {
     let mut tree = RadixTree::new();
     tree.insert(build, count);
     tree
   }
 
-  pub fn insert(&mut self, build: &String, count: u16) {
+  pub fn insert(&mut self, build: &str, count: u16) {
+    if build == "" {
+      return;
+    }
     self.root.walk(build, count);
   }
 }
-
