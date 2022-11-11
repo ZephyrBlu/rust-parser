@@ -110,6 +110,7 @@ impl Node {
           child.children.sort_by(|a, b| b.total.cmp(&a.total));
           child.total += count;
         }
+        self.total += count;
 
         inserted = true;
         break;
@@ -128,6 +129,7 @@ impl Node {
           child.value = count;
         }
         child.total += count;
+        self.total += count;
 
         inserted = true;
         break;
