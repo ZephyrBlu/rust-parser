@@ -615,41 +615,49 @@ impl Builds {
       let comparison_builds: Vec<&str> = build_comparison.split(BUILD_SEPARATOR).collect();
 
       if !self.build_clusters.contains_key(comparison_builds[0]) {
+        let build_count = &self.builds[comparison_builds[0]];
         self.build_clusters.insert(
           comparison_builds[0].to_string(),
           Cluster {
               build: ClusterBuild {
                 build: comparison_builds[0].to_string(),
-                count: self.builds[comparison_builds[0]].total,
+                total: build_count.total,
+                wins: build_count.wins,
+                losses: build_count.losses,
                 diff: 0.0,
               },
               cluster: BuildList {
-                total_count: 0,
+                total: 0,
                 builds: vec![],
               },
               matchup: String::new(),
-              wins: self.builds[comparison_builds[1]].wins,
-              losses: self.builds[comparison_builds[1]].losses,
+              total: build_count.total,
+              wins: build_count.wins,
+              losses: build_count.losses,
               tree: RadixTree::new(),
             },
         );
       }
 
       if !self.build_clusters.contains_key(comparison_builds[1]) {
+        let build_count = &self.builds[comparison_builds[1]];
         self.build_clusters.insert(
           comparison_builds[1].to_string(),
           Cluster {
               build: ClusterBuild {
                 build: comparison_builds[1].to_string(),
-                count: self.builds[comparison_builds[1]].total,
+                total: build_count.total,
+                wins: build_count.wins,
+                losses: build_count.losses,
                 diff: 0.0,
               },
               cluster: BuildList {
-                total_count: 0,
+                total: 0,
                 builds: vec![],
               },
-              wins: self.builds[comparison_builds[1]].wins,
-              losses: self.builds[comparison_builds[1]].losses,
+              total: build_count.total,
+              wins: build_count.wins,
+              losses: build_count.losses,
               matchup: String::new(),
               tree: RadixTree::new(),
             },
@@ -765,8 +773,11 @@ impl Builds {
               comparison_builds[1],
             );
             let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
-
             build.diff = *cross_cluster_diff;
+
+            max_cluster.total += build.total;
+            max_cluster.wins += build.wins;
+            max_cluster.losses += build.losses;
           }
 
           max_cluster.cluster.builds.extend(min_build_cluster.cluster.builds);
@@ -783,7 +794,9 @@ impl Builds {
 
           max_cluster.cluster.builds.push(ClusterBuild {
             build: min_build.to_string(),
-            count: min_build_cluster.build.count,
+            total: min_build_cluster.build.total,
+            wins: min_build_cluster.build.wins,
+            losses: min_build_cluster.build.losses,
             diff: *cross_cluster_diff,
           });
         }
@@ -796,9 +809,9 @@ impl Builds {
         let mut builds: Vec<Cluster> = vec![];
 
         for (_, cluster) in &mut self.build_clusters {
-          cluster.cluster.total_count = 0;
+          cluster.cluster.total = 0;
           for build in &cluster.cluster.builds {
-            cluster.cluster.total_count += build.count;
+            cluster.cluster.total += build.total;
           }
 
           builds.push(cluster.clone());
@@ -811,7 +824,7 @@ impl Builds {
           let matchup = deconstructed_root_build[0];
           let root_buildings = deconstructed_root_build[1];
           cluster.matchup = matchup.to_string();
-          cluster.tree.insert(&root_buildings.to_string(), cluster.build.count);
+          cluster.tree.insert(&root_buildings.to_string(), cluster.build.total);
 
           for (idx, build) in cluster.cluster.builds.iter().enumerate() {
             if idx >= 25 {
@@ -819,13 +832,13 @@ impl Builds {
             }
             let deconstructed_build: Vec<&str> = build.build.split(SECTION_SEPARATOR).collect();
             let buildings = deconstructed_build[1];
-            cluster.tree.insert(&buildings.to_string(), build.count);
+            cluster.tree.insert(&buildings.to_string(), build.total);
           }
           // Builds::generate_build_tree(cluster);
         }
 
         builds.sort_by(|a, b|
-          b.build.count.cmp(&a.build.count)
+          b.build.total.cmp(&a.build.total)
         );
 
         let mut matchup_clusters: HashMap<&str, u8> = HashMap::new();
@@ -842,8 +855,8 @@ impl Builds {
 
           self.build_tree
             .entry(matchup.to_string())
-            .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.count))
-            .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.count));
+            .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.total))
+            .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.total));
           matchup_clusters
             .entry(matchup)
             .and_modify(|count| *count += 1)

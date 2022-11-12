@@ -19,6 +19,7 @@ pub struct ClusterTree {
 pub struct Cluster {
   pub build: ClusterBuild,
   pub matchup: String,
+  pub total: u16,
   pub wins: u16,
   pub losses: u16,
   pub cluster: BuildList,
@@ -28,13 +29,15 @@ pub struct Cluster {
 #[derive(Serialize, Clone)]
 pub struct ClusterBuild {
   pub build: String,
-  pub count: u16,
+  pub total: u16,
+  pub wins: u16,
+  pub losses: u16,
   pub diff: f32,
 }
 
 #[derive(Serialize, Clone)]
 pub struct BuildList {
-  pub total_count: u16,
+  pub total: u16,
   pub builds: Vec<ClusterBuild>,
 }
 
