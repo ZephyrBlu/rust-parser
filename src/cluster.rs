@@ -19,6 +19,8 @@ pub struct ClusterTree {
 pub struct Cluster {
   pub build: ClusterBuild,
   pub matchup: String,
+  pub wins: u16,
+  pub losses: u16,
   pub cluster: BuildList,
   pub tree: RadixTree,
 }

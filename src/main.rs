@@ -151,7 +151,12 @@ fn main() {
       for (p_id, player_build_index) in builds.iter().enumerate() {
         let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
         let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-        build_tokens.generate_tokens(&player_build, token_prefix);
+
+        let mut win = false;
+        if let ReplayEntry::Winner(winner_id) = replay_summary.get("winner").unwrap() {
+          win = p_id == *winner_id as usize;
+        }
+        build_tokens.generate_tokens(&player_build, win, token_prefix);
 
         if player_build.len() <= 3 {
           // println!("Build has less than 3 buildings: {:?}", player_build);
@@ -290,8 +295,8 @@ fn main() {
   let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &result);
 
-  let build_comparisons_output = File::create("../sc2.gg/public/data/comparisons.json").unwrap();
-  serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
+  // let build_comparisons_output = File::create("../sc2.gg/public/data/comparisons.json").unwrap();
+  // serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
 
   let token_probability_output = File::create("../sc2.gg/public/data/probability.json").unwrap();
   serde_json::to_writer(&token_probability_output, &build_tokens.probability);

@@ -7,8 +7,17 @@ use std::str;
 
 use crate::cluster::{Cluster, ClusterBuild, BuildList, RadixTree};
 
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct BuildCount {
+  total: u16,
+  wins: u16,
+  losses: u16,
+}
+
 pub struct Builds {
-  pub builds: HashMap<String, u16>,
+  pub builds: HashMap<String, BuildCount>,
   tokens: HashMap<String, u32>,
   cached_token_probability: HashMap<String, f32>,
   pub probability: HashMap<String, f32>,
@@ -48,14 +57,35 @@ impl Builds {
     }
   }
 
-  pub fn generate_tokens(&mut self, build: &Vec<String>, token_prefix: String) {
+  pub fn generate_tokens(&mut self, build: &Vec<String>, win: bool, token_prefix: String) {
     self.builds
       .entry(format!(
         "{token_prefix}{SECTION_SEPARATOR}{}",
         build.join(BUILDING_SEPARATOR)
       ))
-      .and_modify(|build_count| *build_count += 1)
-      .or_insert(1);
+      .and_modify(|build_count| {
+        build_count.total += 1;
+        if win {
+          build_count.wins += 1;
+        } else {
+          build_count.losses += 1;
+        }
+      })
+      .or_insert_with(|| {
+        let mut build = BuildCount {
+          total: 1,
+          wins: 0,
+          losses: 0,
+        };
+
+        if win {
+          build.wins += 1;
+        } else {
+          build.losses += 1;
+        }
+
+        build
+      });
 
     for i in 0..build.len() {
       if i > 10 {
@@ -590,7 +620,7 @@ impl Builds {
           Cluster {
               build: ClusterBuild {
                 build: comparison_builds[0].to_string(),
-                count: self.builds[comparison_builds[0]],
+                count: self.builds[comparison_builds[0]].total,
                 diff: 0.0,
               },
               cluster: BuildList {
@@ -598,6 +628,8 @@ impl Builds {
                 builds: vec![],
               },
               matchup: String::new(),
+              wins: self.builds[comparison_builds[1]].wins,
+              losses: self.builds[comparison_builds[1]].losses,
               tree: RadixTree::new(),
             },
         );
@@ -609,13 +641,15 @@ impl Builds {
           Cluster {
               build: ClusterBuild {
                 build: comparison_builds[1].to_string(),
-                count: self.builds[comparison_builds[1]],
+                count: self.builds[comparison_builds[1]].total,
                 diff: 0.0,
               },
               cluster: BuildList {
                 total_count: 0,
                 builds: vec![],
               },
+              wins: self.builds[comparison_builds[1]].wins,
+              losses: self.builds[comparison_builds[1]].losses,
               matchup: String::new(),
               tree: RadixTree::new(),
             },
@@ -705,8 +739,8 @@ impl Builds {
           continue;
         }
 
-        let build_count = self.builds[build];
-        let other_build_count = self.builds[other_build];
+        let build_count = self.builds[build].total;
+        let other_build_count = self.builds[other_build].total;
 
         let max_build;
         let min_build;
