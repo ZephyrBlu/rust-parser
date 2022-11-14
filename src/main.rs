@@ -73,7 +73,7 @@ fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/DreamHack Masters/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -250,14 +250,6 @@ fn main() {
 
   // ----------------------------------------------------------------------
 
-  // let queries = [
-    // "protoss",
-    // "terran",
-    // "zerg",
-    // "protoss terran",
-    // "zerg protoss",
-    // "terran zerg",    
-  // ];
   let indexes = vec![
     &race_index,
     &player_index,
@@ -289,28 +281,34 @@ fn main() {
     }
   }
 
-  let results_output = File::create("../sc2.gg/public/data/computed.json").unwrap();
+  let results_output = File::create("../search/data/computed.json").unwrap();
   serde_json::to_writer(&results_output, &replay_search_results);
 
-  let replay_output = File::create("../sc2.gg/public/data/replays.json").unwrap();
-  serde_json::to_writer(&replay_output, &result);
+  let mut mapped_replays = HashMap::new();
+  for replay in &result.replays {
+    if let ReplayEntry::ContentHash(value) = replay.get("content_hash").unwrap() {
+      mapped_replays.insert(value, replay);
+    }
+  }
+  let replay_output = File::create("../search/data/replays.json").unwrap();
+  serde_json::to_writer(&replay_output, &mapped_replays);
 
-  // let build_comparisons_output = File::create("../sc2.gg/public/data/comparisons.json").unwrap();
+  // let build_comparisons_output = File::create("../search/data/comparisons.json").unwrap();
   // serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
 
-  let token_probability_output = File::create("../sc2.gg/public/data/probability.json").unwrap();
+  let token_probability_output = File::create("../search/data/probability.json").unwrap();
   serde_json::to_writer(&token_probability_output, &build_tokens.probability);
 
-  let build_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
+  let build_output = File::create("../search/data/builds.json").unwrap();
   serde_json::to_writer(&build_output, &build_tokens.builds);
 
-  let cluster_output = File::create("../sc2.gg/public/data/clusters.json").unwrap();
+  let cluster_output = File::create("../search/data/clusters.json").unwrap();
   serde_json::to_writer(&cluster_output, &build_tokens.build_clusters);
 
-  let tree_output = File::create("../sc2.gg/public/data/build_tree.json").unwrap();
+  let tree_output = File::create("../search/data/build_tree.json").unwrap();
   serde_json::to_writer(&tree_output, &build_tokens.build_tree);
 
-  let build_token_output = File::create("../sc2.gg/public/data/tokens.json").unwrap();
+  let build_token_output = File::create("../search/data/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);
 
   // let mut filtered_build_index = Index::new();
@@ -328,7 +326,7 @@ fn main() {
     // ("build", filtered_build_index),
   ]);
 
-  // let index_output = File::create("../sc2.gg/public/data/indexes.json").unwrap();
+  // let index_output = File::create("../search/data/indexes.json").unwrap();
   // serde_json::to_writer(&index_output, &indexes);
 
   // let mut build_mappings: Vec<Vec<String>> = vec![];
@@ -337,7 +335,7 @@ fn main() {
   //   build_mappings.push(split_build);
   // }
 
-  // let builds_output = File::create("../sc2.gg/public/data/builds.json").unwrap();
+  // let builds_output = File::create("../search/data/builds.json").unwrap();
   // serde_json::to_writer(&builds_output, &build_mappings);
 
   // let mut compressed_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
