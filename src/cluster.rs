@@ -114,8 +114,8 @@ impl Node {
           child.children.push(new_node);
           child.children.sort_by(|a, b| b.total.cmp(&a.total));
           child.total += count;
-          self.total += count;
         }
+        self.total += count;
 
         inserted = true;
         break;
