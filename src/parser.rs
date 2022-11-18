@@ -103,11 +103,11 @@ impl<'a> ReplayParser<'a> {
     let parsed_metadata: Metadata = serde_json::from_str(&replay.metadata).unwrap();
 
     let winner = match parsed_metadata.Players
-    .iter()
-    .find(|player| player.Result == "Win") {
-      Some(player) => player.PlayerID,
-      None => return Err("couldn't find winner"),
-    };
+      .iter()
+      .find(|player| player.Result == "Win") {
+        Some(player) => player.PlayerID,
+        None => return Err("couldn't find winner"),
+      };
     let game_length = parsed_metadata.Duration;
 
     let raw_map = &replay.player_info

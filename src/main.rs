@@ -154,7 +154,7 @@ fn main() {
 
         let mut win = false;
         if let ReplayEntry::Winner(winner_id) = replay_summary.get("winner").unwrap() {
-          win = p_id == *winner_id as usize;
+          win = (p_id + 1) == *winner_id as usize;
         }
         build_tokens.generate_tokens(&player_build, win, token_prefix);
 
