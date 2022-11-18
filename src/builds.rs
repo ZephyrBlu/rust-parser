@@ -628,6 +628,8 @@ impl Builds {
               },
               cluster: BuildList {
                 total: 0,
+                wins: 0,
+                losses: 0,
                 builds: vec![],
               },
               matchup: String::new(),
@@ -653,6 +655,8 @@ impl Builds {
               },
               cluster: BuildList {
                 total: 0,
+                wins: 0,
+                losses: 0,
                 builds: vec![],
               },
               total: build_count.total,
@@ -810,8 +814,12 @@ impl Builds {
 
         for (_, cluster) in &mut self.build_clusters {
           cluster.cluster.total = 0;
+          cluster.cluster.wins = 0;
+          cluster.cluster.losses = 0;
           for build in &cluster.cluster.builds {
             cluster.cluster.total += build.total;
+            cluster.cluster.wins += build.wins;
+            cluster.cluster.losses += build.losses;
           }
 
           builds.push(cluster.clone());

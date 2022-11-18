@@ -38,6 +38,8 @@ pub struct ClusterBuild {
 #[derive(Serialize, Clone)]
 pub struct BuildList {
   pub total: u16,
+  pub wins: u16,
+  pub losses: u16,
   pub builds: Vec<ClusterBuild>,
 }
 
