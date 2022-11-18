@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
 
-use crate::cluster::{Cluster, ClusterBuild, BuildList, RadixTree};
+use crate::cluster::{Cluster, ClusterBuild, RadixTree};
 
 use serde::Serialize;
 
@@ -626,12 +626,7 @@ impl Builds {
                 losses: build_count.losses,
                 diff: 0.0,
               },
-              cluster: BuildList {
-                total: 0,
-                wins: 0,
-                losses: 0,
-                builds: vec![],
-              },
+              cluster: vec![],
               matchup: String::new(),
               total: build_count.total,
               wins: build_count.wins,
@@ -653,12 +648,7 @@ impl Builds {
                 losses: build_count.losses,
                 diff: 0.0,
               },
-              cluster: BuildList {
-                total: 0,
-                wins: 0,
-                losses: 0,
-                builds: vec![],
-              },
+              cluster: vec![],
               total: build_count.total,
               wins: build_count.wins,
               losses: build_count.losses,
@@ -716,7 +706,7 @@ impl Builds {
       for (build, other_build, _) in &optimal_cluster_comparisons {
         let mut cluster_complete_linkage = true;
 
-        for clustered_build in &self.build_clusters[build].cluster.builds {
+        for clustered_build in &self.build_clusters[build].cluster {
           let mut comparison_builds = [other_build, clustered_build.build.as_str()];
           comparison_builds.sort();
           let build_comparison_identifier = format!(
@@ -731,7 +721,7 @@ impl Builds {
           }
         }
 
-        for other_clustered_build in &self.build_clusters[other_build].cluster.builds {
+        for other_clustered_build in &self.build_clusters[other_build].cluster {
           let mut comparison_builds = [build, other_clustered_build.build.as_str()];
           comparison_builds.sort();
           let build_comparison_identifier = format!(
@@ -767,7 +757,7 @@ impl Builds {
         let mut min_build_cluster = self.build_clusters[min_build].clone();
         if let Some(max_cluster) = self.build_clusters.get_mut(max_build) {
           // update min cluster diffs to max cluster
-          for build in &mut min_build_cluster.cluster.builds {
+          for build in &mut min_build_cluster.cluster {
             let mut comparison_builds = [max_build, &build.build];
             comparison_builds.sort();
 
@@ -784,7 +774,7 @@ impl Builds {
             max_cluster.losses += build.losses;
           }
 
-          max_cluster.cluster.builds.extend(min_build_cluster.cluster.builds);
+          max_cluster.cluster.extend(min_build_cluster.cluster);
 
           let mut comparison_builds = [max_build, min_build];
           comparison_builds.sort();
@@ -796,7 +786,7 @@ impl Builds {
           );
           let cross_cluster_diff = &self.build_comparison_information[&build_comparison_identifier];
 
-          max_cluster.cluster.builds.push(ClusterBuild {
+          max_cluster.cluster.push(ClusterBuild {
             build: min_build.to_string(),
             total: min_build_cluster.build.total,
             wins: min_build_cluster.build.wins,
@@ -813,18 +803,9 @@ impl Builds {
         let mut builds: Vec<Cluster> = vec![];
 
         for (_, cluster) in &mut self.build_clusters {
-          cluster.cluster.total = 0;
-          cluster.cluster.wins = 0;
-          cluster.cluster.losses = 0;
-          for build in &cluster.cluster.builds {
-            cluster.cluster.total += build.total;
-            cluster.cluster.wins += build.wins;
-            cluster.cluster.losses += build.losses;
-          }
-
           builds.push(cluster.clone());
 
-          cluster.cluster.builds.sort_by(|a, b|
+          cluster.cluster.sort_by(|a, b|
             a.diff.partial_cmp(&b.diff).expect("build diff should be a float")
           );
 
@@ -834,7 +815,7 @@ impl Builds {
           cluster.matchup = matchup.to_string();
           cluster.tree.insert(&root_buildings.to_string(), cluster.build.total);
 
-          for (idx, build) in cluster.cluster.builds.iter().enumerate() {
+          for (idx, build) in cluster.cluster.iter().enumerate() {
             if idx >= 25 {
               break;
             }
