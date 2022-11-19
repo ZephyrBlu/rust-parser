@@ -250,39 +250,39 @@ fn main() {
 
   // ----------------------------------------------------------------------
 
-  let indexes = vec![
-    &race_index,
-    &player_index,
-    &map_index,
-    &metadata_index,
-  ];
+  // let indexes = vec![
+  //   &race_index,
+  //   &player_index,
+  //   &map_index,
+  //   &metadata_index,
+  // ];
 
-  let mut queries = vec![];
-  for index in &indexes {
-    for key in index.hash_entries.keys() {
-      queries.push(key.to_lowercase());
-    }
-  }
+  // let mut queries = vec![];
+  // for index in &indexes {
+  //   for key in index.hash_entries.keys() {
+  //     queries.push(key.to_lowercase());
+  //   }
+  // }
 
-  let mut search = Search::new();
+  // let mut search = Search::new();
 
-  for query in queries {
-    search.search(query, &indexes);
-  }
+  // for query in queries {
+  //   search.search(query, &indexes);
+  // }
 
-  let mut replay_search_results: HashMap<&String, Vec<&ReplaySummary>> = HashMap::new();
-  for (query_key, references) in &search.results {
-    for id in references {
-      let replay = &result.replays[*id as usize];
-      replay_search_results
-        .entry(query_key)
-        .and_modify(|references| references.push(replay))
-        .or_insert(vec![replay]);
-    }
-  }
+  // let mut replay_search_results: HashMap<&String, Vec<&ReplaySummary>> = HashMap::new();
+  // for (query_key, references) in &search.results {
+  //   for id in references {
+  //     let replay = &result.replays[*id as usize];
+  //     replay_search_results
+  //       .entry(query_key)
+  //       .and_modify(|references| references.push(replay))
+  //       .or_insert(vec![replay]);
+  //   }
+  // }
 
-  let results_output = File::create("../search/data/computed.json").unwrap();
-  serde_json::to_writer(&results_output, &replay_search_results);
+  // let results_output = File::create("../search/data/computed.json").unwrap();
+  // serde_json::to_writer(&results_output, &replay_search_results);
 
   let mut mapped_replays = HashMap::new();
   for replay in &result.replays {
