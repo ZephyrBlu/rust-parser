@@ -220,25 +220,25 @@ fn main() {
   println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
   println!("total paths: {:?}", build_tokens.token_paths.len());
 
-  println!("comparing builds");
-  build_tokens.compare_builds();
-  println!("generating build clusters");
-  build_tokens.generate_clusters();
+  // println!("comparing builds");
+  // build_tokens.compare_builds();
+  // println!("generating build clusters");
+  // build_tokens.generate_clusters();
 
-  let mut build_information = vec![];
-  for (builds, information) in &build_tokens.build_comparison_information {
-    build_information.push((information, builds));
-  }
-  build_information.sort_by(|a, b|
-    a.0
-      .partial_cmp(&b.0)
-      .expect("path probabilities should be floats"));
-  build_information.reverse();
-
-  // for (information, builds) in build_information {
-  //   println!("{:?} {:?}", information, builds);
+  // let mut build_information = vec![];
+  // for (builds, information) in &build_tokens.build_comparison_information {
+  //   build_information.push((information, builds));
   // }
-  println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
+  // build_information.sort_by(|a, b|
+  //   a.0
+  //     .partial_cmp(&b.0)
+  //     .expect("path probabilities should be floats"));
+  // build_information.reverse();
+
+  // // for (information, builds) in build_information {
+  // //   println!("{:?} {:?}", information, builds);
+  // // }
+  // println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
 
   build_tokens.generate_matchup_build_trees();
 

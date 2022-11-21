@@ -157,7 +157,7 @@ impl Node {
 
   pub fn prune(&mut self, min_count: u16) -> i16 {
     let mut nodes_to_remove = vec![];
-    let mut new_total: i16 = 0;
+    let mut new_total: i16 = self.value as i16;
     for (idx, child) in self.children.iter_mut().enumerate() {
       if child.total < min_count {
         nodes_to_remove.push(idx);
@@ -198,13 +198,11 @@ impl Node {
       self.children = child.children.clone();
     }
 
-    // if self.children.len() == 0 && self.value < min_count {
-    //   -1
-    // } else {
-    //   self.total as i16
-    // }
-
-    self.total as i16
+    if self.children.len() == 0 && self.total < min_count {
+      -1
+    } else {
+      self.total as i16
+    }
   }
 }
 
