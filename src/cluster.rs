@@ -90,6 +90,14 @@ impl Node {
   pub fn walk(&mut self, build_fragment: &str, count: u16) {
     let mut inserted = false;
     for child in &mut self.children {
+      if child.label == build_fragment {
+        child.total += count;
+        child.value += count;
+
+        inserted = true;
+        break;
+      }
+
       let match_length = child.match_key(&build_fragment);
       if match_length == 0 {
         continue;
@@ -157,6 +165,7 @@ impl Node {
         let remove_child = child.prune(min_count);
         if remove_child {
           nodes_to_remove.push(idx);
+          self.total -= child.total;
         }
       }
     }
@@ -168,7 +177,7 @@ impl Node {
       self.children.remove(idx);
     }
 
-    if self.children.len() == 0 && self.value == 0 {
+    if self.children.len() == 0 && self.value < min_count {
       true
     } else {
       false
