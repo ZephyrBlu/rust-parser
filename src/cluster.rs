@@ -35,7 +35,7 @@ pub struct ClusterBuild {
   pub diff: f32,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Node {
   pub label: String,
   pub children: Vec<Node>,
@@ -173,11 +173,12 @@ impl Node {
 
     self.total = new_total as u16;
 
-    if self.value < min_count {
-      self.value = 0;
-    } else {
-      self.total += self.value;
-    }
+    // // if the leaf value is less than the min count, zero it
+    // if self.value < min_count {
+    //   self.value = 0;
+    // } else {
+    //   self.total += self.value;
+    // }
 
     // sort and reverse to remove from back first, since removal changes position
     nodes_to_remove.sort();
@@ -187,27 +188,27 @@ impl Node {
     }
 
     // merge if 1 child and is not a leaf node
-    if self.children.len() == 1 && self.value == 0 {
+    if self.label != "ROOT" && self.children.len() == 1 && self.value == 0 {
       let child = &self.children[0];
 
       self.value = child.value;
       self.label = format!("{},{}", self.label, child.label);
 
       // re-parent children to current node
-      if child.children.len() != 0 {
-        self.children = child.children.clone();
-      }
+      self.children = child.children.clone();
     }
 
-    if self.children.len() == 0 && self.value < min_count {
-      -1
-    } else {
-      self.total as i16
-    }
+    // if self.children.len() == 0 && self.value < min_count {
+    //   -1
+    // } else {
+    //   self.total as i16
+    // }
+
+    self.total as i16
   }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct RadixTree {
   pub root: Node,
 }
