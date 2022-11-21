@@ -146,6 +146,34 @@ impl Node {
       self.total += count;
     }
   }
+
+  pub fn prune(&mut self, min_count: u16) -> bool {
+    let mut nodes_to_remove = vec![];
+    for (idx, child) in self.children.iter_mut().enumerate() {
+      if child.total < min_count {
+        nodes_to_remove.push(idx);
+        self.total -= child.total;
+      } else {
+        let remove_child = child.prune(min_count);
+        if remove_child {
+          nodes_to_remove.push(idx);
+        }
+      }
+    }
+
+    // sort and reverse to remove from back first, since removal changes position
+    nodes_to_remove.sort();
+    nodes_to_remove.reverse();
+    for idx in nodes_to_remove {
+      self.children.remove(idx);
+    }
+
+    if self.children.len() == 0 && self.value == 0 {
+      true
+    } else {
+      false
+    }
+  }
 }
 
 #[derive(Serialize, Clone)]
@@ -171,5 +199,9 @@ impl RadixTree {
       return;
     }
     self.root.walk(build, count);
+  }
+
+  pub fn prune(&mut self, min_count: u16) {
+    self.root.prune(min_count);
   }
 }

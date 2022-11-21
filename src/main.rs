@@ -240,6 +240,8 @@ fn main() {
   // }
   println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
 
+  build_tokens.generate_matchup_build_trees();
+
   // let mut comparison_mappings: HashMap<u32, &String> = HashMap::new();
   // for (index, (comparison_identifier, comparison_diff)) in build_tokens.build_comparison_information.iter().enumerate() {
   //   comparison_mappings.insert(index as u32, comparison_identifier);
@@ -307,6 +309,9 @@ fn main() {
 
   let tree_output = File::create("../search/data/build_tree.json").unwrap();
   serde_json::to_writer(&tree_output, &build_tokens.build_tree);
+
+  let raw_tree_output = File::create("../search/data/raw_build_tree.json").unwrap();
+  serde_json::to_writer(&raw_tree_output, &build_tokens.raw_build_tree);
 
   let build_token_output = File::create("../search/data/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);

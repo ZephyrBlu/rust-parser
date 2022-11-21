@@ -1,11 +1,11 @@
 
-mod player_stats;
+mod player_stats_event;
 mod object_event;
 
 use crate::replay::{Event, Parsed};
 use crate::game::Game;
 use crate::decoders::DecoderResult;
-use player_stats::PlayerStatsEvent;
+use player_stats_event::PlayerStatsEvent;
 use object_event::ObjectEvent;
 
 pub struct EventParser<'a> {

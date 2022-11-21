@@ -28,6 +28,7 @@ pub struct Builds {
   pub build_comparison_information: HashMap<String, f32>,
   pub build_clusters: HashMap<String, Cluster>,
   pub build_tree: HashMap<String, RadixTree>,
+  pub raw_build_tree: HashMap<String, RadixTree>,
 }
 
 const MAX_TOKEN_SIZE: usize = 5;
@@ -54,6 +55,7 @@ impl Builds {
       build_comparison_information: HashMap::new(),
       build_clusters: HashMap::new(),
       build_tree: HashMap::new(),
+      raw_build_tree: HashMap::new(),
     }
   }
 
@@ -112,6 +114,23 @@ impl Builds {
           break;
         }
       }
+    }
+  }
+
+  pub fn generate_matchup_build_trees(&mut self) {
+    for (raw_build, build_count) in &self.builds {
+      let deconstructed_build: Vec<&str> = raw_build.split(SECTION_SEPARATOR).collect();
+      let matchup = deconstructed_build[0];
+      let build = deconstructed_build[1];
+
+      self.raw_build_tree
+        .entry(matchup.to_string())
+        .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.total))
+        .or_insert(RadixTree::from(build, build_count.total));
+    }
+
+    for (_, tree) in &mut self.raw_build_tree {
+      tree.prune(10);
     }
   }
 
