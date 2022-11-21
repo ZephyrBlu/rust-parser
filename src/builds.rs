@@ -118,7 +118,12 @@ impl Builds {
   }
 
   pub fn generate_matchup_build_trees(&mut self) {
+    let mut skipped = 0;
     for (raw_build, build_count) in &self.builds {
+      if build_count.total < 10 {
+        skipped += 1;
+      }
+
       let deconstructed_build: Vec<&str> = raw_build.split(SECTION_SEPARATOR).collect();
       let matchup = deconstructed_build[0];
       let build = deconstructed_build[1];
@@ -132,6 +137,8 @@ impl Builds {
     for (_, tree) in &mut self.raw_build_tree {
       tree.prune(10);
     }
+
+    println!("{:?} builds with less than 10 occurrences", skipped);
   }
 
   pub fn generate_token_distributions(&mut self) {
