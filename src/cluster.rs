@@ -155,19 +155,28 @@ impl Node {
     }
   }
 
-  pub fn prune(&mut self, min_count: u16) -> bool {
+  pub fn prune(&mut self, min_count: u16) -> i16 {
     let mut nodes_to_remove = vec![];
+    let mut new_total: i16 = 0;
     for (idx, child) in self.children.iter_mut().enumerate() {
       if child.total < min_count {
         nodes_to_remove.push(idx);
-        self.total -= child.total;
       } else {
-        let remove_child = child.prune(min_count);
-        if remove_child {
+        let child_total = child.prune(min_count);
+        if child_total == -1 {
           nodes_to_remove.push(idx);
-          self.total -= child.total;
+        } else {
+          new_total += child_total;
         }
       }
+    }
+
+    self.total = new_total as u16;
+
+    if self.value < min_count {
+      self.value = 0;
+    } else {
+      self.total += self.value;
     }
 
     // sort and reverse to remove from back first, since removal changes position
@@ -177,10 +186,23 @@ impl Node {
       self.children.remove(idx);
     }
 
+    // merge if 1 child and is not a leaf node
+    if self.children.len() == 1 && self.value == 0 {
+      let child = &self.children[0];
+
+      self.value = child.value;
+      self.label = format!("{},{}", self.label, child.label);
+
+      // re-parent children to current node
+      if child.children.len() != 0 {
+        self.children = child.children.clone();
+      }
+    }
+
     if self.children.len() == 0 && self.value < min_count {
-      true
+      -1
     } else {
-      false
+      self.total as i16
     }
   }
 }
