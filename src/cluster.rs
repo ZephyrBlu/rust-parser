@@ -155,13 +155,13 @@ impl Node {
     }
   }
 
-  pub fn prune(&mut self, min_count: u16) -> i16 {
+  pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
     let mut nodes_to_remove = vec![];
     for (idx, child) in self.children.iter_mut().enumerate() {
-      if child.total < min_count {
+      if depth == 8 || child.total < min_limit {
         nodes_to_remove.push(idx);
       } else {
-        let child_total = child.prune(min_count);
+        let child_total = child.prune(min_limit, depth + 1);
         if child_total == -1 {
           nodes_to_remove.push(idx);
         }
@@ -186,7 +186,12 @@ impl Node {
       self.children = child.children.clone();
     }
 
-    if self.children.len() == 0 && self.total < min_count {
+    self.children.sort_by(|a, b| b.total.cmp(&a.total));
+    while self.children.len() > 3 {
+      self.children.pop();
+    }
+
+    if self.children.len() == 0 && self.total < min_limit {
       -1
     } else {
       self.total as i16
@@ -219,7 +224,8 @@ impl RadixTree {
     self.root.walk(build, count);
   }
 
-  pub fn prune(&mut self, min_count: u16) {
-    self.root.prune(min_count);
+  pub fn prune(&mut self) {
+    // self.root.prune(100, 20, 20);
+    self.root.prune(5, 0);
   }
 }
