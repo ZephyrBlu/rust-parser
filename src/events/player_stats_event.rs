@@ -1,11 +1,12 @@
 use crate::replay::Event;
 use crate::decoders::DecoderResult;
 use crate::game::Game;
+use crate::game_state::GameState;
 
 pub struct PlayerStatsEvent;
 
 impl PlayerStatsEvent {
-  pub fn new(game: &mut Game, event: &Event) -> Result<(), &'static str> {
+  pub fn new(game: &mut Game, state: GameState, event: &Event) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
     for (field, value) in &event.entries {
       match field.as_str() {

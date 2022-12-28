@@ -130,7 +130,7 @@ impl Builds {
     }
 
     for (_, tree) in &mut self.raw_build_tree {
-      tree.prune(50);
+      tree.prune();
     }
   }
 

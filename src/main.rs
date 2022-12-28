@@ -10,6 +10,7 @@ mod parser;
 mod builds;
 mod search;
 mod cluster;
+mod game_state;
 
 use crate::parser::ReplayParser;
 use crate::replay::Replay;
