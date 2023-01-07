@@ -3,3 +3,4 @@
 *.SC2Replay
 *perf*
 *.json
+*.csv

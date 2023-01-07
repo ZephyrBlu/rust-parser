@@ -155,6 +155,7 @@ impl Node {
     }
   }
 
+  // this needs correctness improvements. it's vaguely right but subltey wrong
   pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
     let mut nodes_to_remove = vec![];
     for (idx, child) in self.children.iter_mut().enumerate() {

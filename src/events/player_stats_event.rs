@@ -6,7 +6,7 @@ use crate::game_state::GameState;
 pub struct PlayerStatsEvent;
 
 impl PlayerStatsEvent {
-  pub fn new(game: &mut Game, state: GameState, event: &Event) -> Result<(), &'static str> {
+  pub fn new(game: &mut Game, state: &mut GameState, event: &Event) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
     for (field, value) in &event.entries {
       match field.as_str() {

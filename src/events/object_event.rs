@@ -198,9 +198,9 @@ impl ObjectEvent {
 
     state.gameloop = current_gameloop;
     let object_type_state = if object.type_name == "building" {
-      state.buildings
+      &mut state.buildings
     } else {
-      state.units
+      &mut state.units
     };
     object_type_state
       .entry(object.object_name.to_string())
@@ -210,7 +210,8 @@ impl ObjectEvent {
     // 9408 = ~7min, 22.4 gameloops per sec
     if
       current_gameloop > 0 &&
-      current_gameloop > 9408 &&
+      current_gameloop < 9408 &&
+      object.object_name != "" &&
       object.type_name == "building" &&
       !(object.object_name.contains("Reactor") || object.object_name.contains("TechLab")) &&
       game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize

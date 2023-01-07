@@ -35,7 +35,8 @@ impl<'a> EventParser<'a> {
         },
         "NNet.Replay.Tracker.SUnitInitEvent" |
         "NNet.Replay.Tracker.SUnitBornEvent" |
-        "NNet.Replay.Tracker.SUnitTypeChangeEvent" => {
+        "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
+        "NNet.Replay.Tracker.SUnitDiedEvent" => {
           ObjectEvent::new(self.game, &mut self.state, event);
           // Ok(())
         },

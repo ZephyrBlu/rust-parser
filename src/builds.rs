@@ -18,6 +18,7 @@ pub struct BuildCount {
 
 pub struct Builds {
   pub builds: HashMap<String, BuildCount>,
+  pub players: HashSet<String>,
   tokens: HashMap<String, u32>,
   cached_token_probability: HashMap<String, f32>,
   pub probability: HashMap<String, f32>,
@@ -29,6 +30,7 @@ pub struct Builds {
   pub build_clusters: HashMap<String, Cluster>,
   pub build_tree: HashMap<String, RadixTree>,
   pub raw_build_tree: HashMap<String, RadixTree>,
+  pub player_trees: HashMap<String, RadixTree>,
 }
 
 const MAX_TOKEN_SIZE: usize = 5;
@@ -38,6 +40,11 @@ const TOKEN_TERMINATOR: &str = "NONE";
 const BUILDING_SEPARATOR: &str = ",";
 const BUILDING_SEPARATOR_CHAR: char = ',';
 const BUILD_SEPARATOR: &str = "--";
+const FILTER_BUILDINGS: [&str; 3] = [
+  "Assimilator",
+  "Refinery",
+  "Extractor",
+];
 
 const MAX_COMPARISON_DIFF: f32 = 15.0;
 
@@ -45,6 +52,7 @@ impl Builds {
   pub fn new() -> Builds {
     Builds {
       builds: HashMap::new(),
+      players: HashSet::new(),
       tokens: HashMap::new(),
       cached_token_probability: HashMap::new(),
       probability: HashMap::new(),
@@ -56,14 +64,25 @@ impl Builds {
       build_clusters: HashMap::new(),
       build_tree: HashMap::new(),
       raw_build_tree: HashMap::new(),
+      player_trees: HashMap::new(),
     }
   }
 
   pub fn generate_tokens(&mut self, build: &Vec<String>, win: bool, token_prefix: String) {
+    let filtered_build: Vec<String> = build
+      .iter()
+      .filter(|building| !FILTER_BUILDINGS.contains(&building.as_str()))
+      .map(|building| building.clone())
+      .collect();
+
+    if filtered_build.len() == 0 {
+      return;
+    }
+
     self.builds
       .entry(format!(
         "{token_prefix}{SECTION_SEPARATOR}{}",
-        build.join(BUILDING_SEPARATOR)
+        filtered_build.join(BUILDING_SEPARATOR)
       ))
       .and_modify(|build_count| {
         build_count.total += 1;
@@ -89,17 +108,17 @@ impl Builds {
         build
       });
 
-    for i in 0..build.len() {
+    for i in 0..filtered_build.len() {
       if i > 10 {
         break;
       }
 
       for window_size in 1..MAX_TOKEN_SIZE + 1 {
-        let tokens = &build[i..i + window_size];
+        let tokens = &filtered_build[i..i + window_size];
         let mut current_token = tokens[0].clone();
         let mut next_token = TOKEN_TERMINATOR;
 
-        if tokens.len() > 1 && tokens.len() != build.len() {
+        if tokens.len() > 1 && tokens.len() != filtered_build.len() {
           current_token = tokens[..tokens.len() - 1].join(BUILDING_SEPARATOR);
           next_token = &tokens[tokens.len() - 1];
         }
@@ -110,7 +129,7 @@ impl Builds {
           .and_modify(|count| *count += 1)
           .or_insert(1);
 
-        if i + window_size >= build.len() || i + window_size >= 10 {
+        if i + window_size >= filtered_build.len() || i + window_size >= 10 {
           break;
         }
       }
