@@ -1,9 +1,8 @@
 use crate::replay::Replay;
 
-use std::fs::{read_dir, copy};
+use std::fs::{read_dir};
 use std::io::Result;
 use std::path::Path;
-use std::collections::HashMap;
 
 use serde::{Serialize, Deserialize};
 use sha256::digest_file;
@@ -14,36 +13,16 @@ struct Manifest {
 }
 
 pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
-  const TOURNAMENTS: [&str; 6] = [
+  const VALID_TAGS: [&str; 8] = [
     "ASUS ROG",
     "DreamHack Masters",
     "HomeStory Cup",
     "IEM Katowice",
-    "StayAtHome Story Cup",
     "TSL",
+    "Wardi",
+    "Olimoleague",
+    "AlphaX",
   ];
-  const VALID_TAGS: [&str; 10] = [
-    "FINAL",
-    "SEMIFINAL",
-    "QUARTERFINAL",
-    "PLAYOFF",
-    "GROUP",
-    "RO32",
-    "RO16",
-    "RO8",
-    "RO4",
-    "RO2",
-  ];
-  let TAG_MAPPINGS: HashMap<&str, &str> = HashMap::from([
-    ("RO2", "Final"),
-    ("RO4", "Semifinal"),
-    ("RO8", "Quarterfinal"),
-    ("FINAL", "Final"),
-    ("SEMIFINAL", "Semifinal"),
-    ("QUARTERFINAL", "Quarterfinal"),
-    ("PLAYOFF", "Playoff"),
-    ("GROUP", "Group"),
-  ]);
 
   if dir.is_dir() {
     for entry in read_dir(dir)? {
@@ -60,22 +39,9 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             let current_path = path.to_str().unwrap();
             let mut tags = vec![];
 
-            for tag in TOURNAMENTS {
+            for tag in VALID_TAGS {
               if current_path.contains(tag) {
                 tags.push(tag);
-              }
-            }
-
-            for tag in VALID_TAGS {
-              if current_path.to_uppercase().contains(tag) {
-                let mut mapped_tag = tag;
-                if TAG_MAPPINGS.contains_key(mapped_tag) {
-                  mapped_tag = match TAG_MAPPINGS.get(tag) {
-                    Some(value) => value,
-                    None => tag,
-                  }
-                }
-                tags.push(mapped_tag);
               }
             }
 

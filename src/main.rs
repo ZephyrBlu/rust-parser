@@ -89,6 +89,7 @@ pub struct TinybirdGame {
   map: String,
   game_length: u16,
   played_at: u64,
+  event: String,
 }
 
 fn main() {

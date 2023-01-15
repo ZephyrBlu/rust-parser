@@ -126,6 +126,7 @@ impl<'a> ReplayParser<'a> {
         .trim_start_matches("[TLMC14] ")
         .trim_start_matches("[TLMC15] ")
         .trim_start_matches("[TLMC16] ")
+        .trim_start_matches("[TLMC17] ")
         .trim_end_matches(" LE")
         .to_string();
     }
@@ -265,6 +266,7 @@ impl<'a> ReplayParser<'a> {
       map: map.clone(),
       game_length,
       played_at,
+      event: replay.tags.clone(),
     };
 
     let replay_summary: ReplaySummary = HashMap::from([
