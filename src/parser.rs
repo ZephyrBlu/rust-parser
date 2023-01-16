@@ -215,12 +215,14 @@ impl<'a> ReplayParser<'a> {
       }
     }
 
-    let mut serialized_players = String::new();
-    let mut serialized_matchup = String::new();
+    let mut serialized_players = vec![];
+    let mut serialized_matchup = vec![];
     for player in &players {
-      serialized_players.push_str(player.name.as_str());
-      serialized_matchup.push_str(player.race.as_str());
+      serialized_players.push(player.name.clone());
+      serialized_matchup.push(player.race.clone());
     }
+    serialized_players.sort();
+    serialized_matchup.sort();
 
     let loser: u8 = if winner == 1 {
       2
@@ -259,8 +261,8 @@ impl<'a> ReplayParser<'a> {
       loser_name: players[(loser - 1) as usize].name.clone(),
       loser_race: players[(loser - 1) as usize].race.clone(),
       loser_build,
-      matchup: serialized_matchup,
-      player_names: serialized_players,
+      matchup: serialized_matchup.join(""),
+      player_names: serialized_players.join(""),
       players: serde_json::to_string(&players).unwrap(),
       builds: serde_json::to_string(&replay_builds).unwrap(),
       map: map.clone(),
