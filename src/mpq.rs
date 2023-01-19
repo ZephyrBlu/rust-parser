@@ -449,8 +449,7 @@ impl MPQArchive {
       &self.encryption_table,
       &self.hash_table,
       &self.block_table,
-    )
-    .expect("Couldn't find block table entry");
+    ).expect("Couldn't find block table entry");
     let force_decompress = false;
 
     MPQArchive::_read_file(

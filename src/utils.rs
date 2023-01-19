@@ -1,6 +1,7 @@
 use crate::replay::Replay;
+use crate::decoders::DecoderResult;
 
-use std::fs::{read_dir};
+use std::fs::{copy, read_dir};
 use std::io::Result;
 use std::path::Path;
 
@@ -13,7 +14,7 @@ struct Manifest {
 }
 
 pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
-  const VALID_TAGS: [&str; 8] = [
+  const VALID_TAGS: [&str; 11] = [
     "ASUS ROG",
     "DreamHack Masters",
     "HomeStory Cup",
@@ -22,6 +23,9 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
     "Wardi",
     "Olimoleague",
     "AlphaX",
+    "ASUS ROG",
+    "WESG",
+    "WCS",
   ];
 
   if dir.is_dir() {
@@ -52,7 +56,25 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             //   &path,
             //   bucket_path,
             // ).expect("Replay file is copied from existing file structure into bucket structure");
-            replays.push(Replay::new(path, content_hash, tags));
+            let replay = Replay::new(path, content_hash, tags);
+
+            let raw_played_at = &replay.parsed.player_info
+              .iter()
+              .find(|(field, _)| *field == "m_timeUTC")
+              .unwrap().1;
+            let mut played_at = 0;
+            if let DecoderResult::Value(value) = raw_played_at {
+              // TODO: this truncation is not working properly
+              played_at = value.clone() as u64;
+            }
+            // game records time in window epoch for some reason
+            // https://en.wikipedia.org/wiki/Epoch_(computing)
+            played_at = (played_at / 10000000) - 11644473600;
+
+            // between 1st Jan 2022 and 1st Jan 2023
+            if played_at > 1640995200 && played_at < 1672531200 {
+              replays.push(replay);
+            }
           }
         },
         None => continue,
