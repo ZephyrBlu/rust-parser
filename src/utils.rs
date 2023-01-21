@@ -14,7 +14,7 @@ struct Manifest {
 }
 
 pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
-  const VALID_TAGS: [&str; 11] = [
+  const VALID_TAGS: [&str; 10] = [
     "ASUS ROG",
     "DreamHack Masters",
     "HomeStory Cup",
@@ -23,7 +23,6 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
     "Wardi",
     "Olimoleague",
     "AlphaX",
-    "ASUS ROG",
     "WESG",
     "WCS",
   ];
@@ -72,7 +71,7 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             played_at = (played_at / 10000000) - 11644473600;
 
             // between 1st Jan 2022 and 1st Jan 2023
-            if played_at > 1640995200 && played_at < 1672531200 {
+            if played_at >= 1640995200 && played_at < 1672531200 {
               replays.push(replay);
             }
           }

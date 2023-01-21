@@ -1,3 +1,5 @@
+use crate::builds::BuildCount;
+
 use std::cmp::{min};
 use std::mem::swap;
 
@@ -39,17 +41,17 @@ pub struct ClusterBuild {
 pub struct Node {
   pub label: String,
   pub children: Vec<Node>,
-  pub value: u16,
-  pub total: u16,
+  pub value: BuildCount,
+  pub total: BuildCount,
 }
 
 impl Node {
-  pub fn new(label: String, value: u16) -> Node {
+  pub fn new(label: String, value: BuildCount, total: BuildCount) -> Node {
     Node {
       label,
       children: vec![],
       value,
-      total: value,
+      total,
     }
   }
 
@@ -77,22 +79,26 @@ impl Node {
     let current_node_label = &buildings[0..idx];
     let new_node_label = &buildings[idx..];
 
-    let mut new_node = Node::new(new_node_label.join(","), self.value);
+    let mut new_node = Node::new(
+      new_node_label.join(","),
+      self.value.clone(),
+      self.value.clone(),
+    );
     swap(&mut new_node.children, &mut self.children);
 
     self.children.push(new_node);
-    self.children.sort_by(|a, b| b.total.cmp(&a.total));
+    self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
 
     self.label = current_node_label.join(",");
-    self.value = 0;
+    self.value.reset();
   }
 
-  pub fn walk(&mut self, build_fragment: &str, count: u16) {
+  pub fn walk(&mut self, build_fragment: &str, count: &BuildCount) {
     let mut inserted = false;
     for child in &mut self.children {
       if child.label == build_fragment {
-        child.total += count;
-        child.value += count;
+        child.total.add(&count);
+        child.value.add(&count);
 
         inserted = true;
         break;
@@ -112,12 +118,12 @@ impl Node {
         if child.children.len() != 0 {
           child.walk(&next_fragment, count);
         } else {
-          let new_node = Node::new(next_fragment, count);
+          let new_node = Node::new(next_fragment, count.clone(), count.clone());
           child.children.push(new_node);
-          child.children.sort_by(|a, b| b.total.cmp(&a.total));
-          child.total += count;
+          child.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
+          child.total.add(&count);
         }
-        self.total += count;
+        self.total.add(&count);
 
         inserted = true;
         break;
@@ -129,14 +135,14 @@ impl Node {
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         if buildings.len() > match_length {
           let remaining_fragment = buildings[match_length..].join(",");
-          let new_node = Node::new(remaining_fragment, count);
+          let new_node = Node::new(remaining_fragment, count.clone(), count.clone());
           child.children.push(new_node);
-          child.children.sort_by(|a, b| b.total.cmp(&a.total));
+          child.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
         } else {
-          child.value = count;
+          child.value = count.clone();
         }
-        child.total += count;
-        self.total += count;
+        child.total.add(&count);
+        self.total.add(&count);
 
         inserted = true;
         break;
@@ -148,10 +154,10 @@ impl Node {
     }
 
     if !inserted {
-      let new_node = Node::new(build_fragment.to_string(), count);
+      let new_node = Node::new(build_fragment.to_string(), count.clone(), count.clone());
       self.children.push(new_node);
-      self.children.sort_by(|a, b| b.total.cmp(&a.total));
-      self.total += count;
+      self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
+      self.total.add(&count);
     }
   }
 
@@ -159,11 +165,10 @@ impl Node {
   pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
     let mut nodes_to_remove = vec![];
     for (idx, child) in self.children.iter_mut().enumerate() {
-      if depth == 8 || child.total < min_limit {
+      if depth == 8 || child.total.total < min_limit {
         nodes_to_remove.push(idx);
       } else {
-        let child_total = child.prune(min_limit, depth + 1);
-        if child_total == -1 {
+        if child.prune(min_limit, depth + 1) == -1 {
           nodes_to_remove.push(idx);
         }
       }
@@ -177,25 +182,25 @@ impl Node {
     }
 
     // merge if 1 child and is not a leaf node
-    if self.label != "ROOT" && self.children.len() == 1 && self.value == 0 {
+    if self.label != "ROOT" && self.children.len() == 1 && self.value.total == 0 {
       let child = &self.children[0];
 
-      self.value = child.value;
+      self.value = child.value.clone();
       self.label = format!("{},{}", self.label, child.label);
 
       // re-parent children to current node
       self.children = child.children.clone();
     }
 
-    self.children.sort_by(|a, b| b.total.cmp(&a.total));
+    self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
     while self.children.len() > 3 {
       self.children.pop();
     }
 
-    if self.children.len() == 0 && self.total < min_limit {
+    if self.children.len() == 0 && self.total.total < min_limit {
       -1
     } else {
-      self.total as i16
+      1
     }
   }
 }
@@ -208,21 +213,25 @@ pub struct RadixTree {
 impl RadixTree {
   pub fn new() -> RadixTree {
     RadixTree {
-      root: Node::new(String::from("ROOT"), 0),
+      root: Node::new(
+        String::from("ROOT"),
+        BuildCount::new(),
+        BuildCount::new(),
+      ),
     }
   }
 
-  pub fn from(build: &str, count: u16) -> RadixTree {
+  pub fn from(build: &str, count: BuildCount) -> RadixTree {
     let mut tree = RadixTree::new();
     tree.insert(build, count);
     tree
   }
 
-  pub fn insert(&mut self, build: &str, count: u16) {
+  pub fn insert(&mut self, build: &str, count: BuildCount) {
     if build == "" {
       return;
     }
-    self.root.walk(build, count);
+    self.root.walk(build, &count);
   }
 
   pub fn prune(&mut self) {

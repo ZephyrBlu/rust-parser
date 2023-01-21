@@ -9,11 +9,41 @@ use crate::cluster::{Cluster, ClusterBuild, RadixTree};
 
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct BuildCount {
-  total: u16,
-  wins: u16,
-  losses: u16,
+  pub total: u16,
+  pub wins: u16,
+  pub losses: u16,
+}
+
+impl BuildCount {
+  pub fn new() -> BuildCount {
+    BuildCount {
+      total: 0,
+      wins: 0,
+      losses: 0,
+    }
+  }
+
+  pub fn from(total: u16, wins: u16, losses: u16) -> BuildCount {
+    BuildCount {
+      total,
+      wins,
+      losses,
+    }
+  }
+
+  pub fn add(&mut self, other_build_count: &BuildCount) {
+    self.total += other_build_count.total;
+    self.wins += other_build_count.wins;
+    self.losses += other_build_count.losses;
+  }
+
+  pub fn reset(&mut self) {
+    self.total = 0;
+    self.wins = 0;
+    self.losses = 0;
+  }
 }
 
 pub struct Builds {
@@ -144,8 +174,8 @@ impl Builds {
 
       self.raw_build_tree
         .entry(matchup.to_string())
-        .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.total))
-        .or_insert(RadixTree::from(build, build_count.total));
+        .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
+        .or_insert(RadixTree::from(build, build_count.clone()));
     }
 
     for (_, tree) in &mut self.raw_build_tree {
@@ -851,7 +881,7 @@ impl Builds {
           let matchup = deconstructed_root_build[0];
           let root_buildings = deconstructed_root_build[1];
           cluster.matchup = matchup.to_string();
-          cluster.tree.insert(&root_buildings.to_string(), cluster.build.total);
+          // cluster.tree.insert(&root_buildings.to_string(), cluster.build.total);
 
           for (idx, build) in cluster.cluster.iter().enumerate() {
             if idx >= 25 {
@@ -859,7 +889,7 @@ impl Builds {
             }
             let deconstructed_build: Vec<&str> = build.build.split(SECTION_SEPARATOR).collect();
             let buildings = deconstructed_build[1];
-            cluster.tree.insert(&buildings.to_string(), build.total);
+            // cluster.tree.insert(&buildings.to_string(), build.total);
           }
           // Builds::generate_build_tree(cluster);
         }
@@ -880,10 +910,10 @@ impl Builds {
             }
           }
 
-          self.build_tree
-            .entry(matchup.to_string())
-            .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.total))
-            .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.total));
+          // self.build_tree
+          //   .entry(matchup.to_string())
+          //   .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.total))
+          //   .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.total));
           matchup_clusters
             .entry(matchup)
             .and_modify(|count| *count += 1)
