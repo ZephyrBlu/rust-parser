@@ -95,7 +95,7 @@ pub struct TinybirdGame {
 fn main() {
   let now = Instant::now();
 
-  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/2022/1 - Round of 36 - Play-ins/01 - UB Ro16 - ByuN vs Percival/");
+  // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/Projects/rust-parser/");
   let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
@@ -314,10 +314,10 @@ fn main() {
   //   }
   // }
 
-  // let results_output = File::create("../search/data/computed.json").unwrap();
+  // let results_output = File::create("generated/computed.json").unwrap();
   // serde_json::to_writer(&results_output, &replay_search_results);
 
-  let players_output = File::create("../search/data/players.json").unwrap();
+  let players_output = File::create("generated/players.json").unwrap();
   serde_json::to_writer(&players_output, &build_tokens.players);
 
   let mut mapped_replays = HashMap::new();
@@ -326,34 +326,34 @@ fn main() {
       mapped_replays.insert(value, replay);
     }
   }
-  let replay_output = File::create("../search/data/replays.json").unwrap();
+  let replay_output = File::create("generated/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &mapped_replays);
 
-  // let build_comparisons_output = File::create("../search/data/comparisons.json").unwrap();
+  // let build_comparisons_output = File::create("generated/../search/data/comparisons.json").unwrap();
   // serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
 
-  let token_probability_output = File::create("../search/data/probability.json").unwrap();
+  let token_probability_output = File::create("generated/probability.json").unwrap();
   serde_json::to_writer(&token_probability_output, &build_tokens.probability);
 
-  let build_output = File::create("../search/data/builds.json").unwrap();
+  let build_output = File::create("generated/builds.json").unwrap();
   serde_json::to_writer(&build_output, &build_tokens.builds);
 
-  let cluster_output = File::create("../search/data/clusters.json").unwrap();
+  let cluster_output = File::create("generated/clusters.json").unwrap();
   serde_json::to_writer(&cluster_output, &build_tokens.build_clusters);
 
-  let tree_output = File::create("../search/data/build_tree.json").unwrap();
+  let tree_output = File::create("generated/build_tree.json").unwrap();
   serde_json::to_writer(&tree_output, &build_tokens.build_tree);
 
-  let raw_tree_output = File::create("../search/data/raw_build_tree.json").unwrap();
+  let raw_tree_output = File::create("generated/raw_build_tree.json").unwrap();
   serde_json::to_writer(&raw_tree_output, &build_tokens.raw_build_tree);
 
-  let player_trees_output = File::create("../search/data/player_trees.json").unwrap();
+  let player_trees_output = File::create("generated/player_trees.json").unwrap();
   serde_json::to_writer(&player_trees_output, &build_tokens.player_trees);
 
-  let build_token_output = File::create("../search/data/tokens.json").unwrap();
+  let build_token_output = File::create("generated/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);
 
-  File::create("tinybird_sc2.csv").unwrap();
+  File::create("generated/tinybird_sc2.csv").unwrap();
   let mut wtr = Writer::from_path("tinybird_sc2.csv").unwrap();
   for record in tinybird_serialized {
     wtr.serialize(record).unwrap();
@@ -375,7 +375,7 @@ fn main() {
   //   // ("build", filtered_build_index),
   // ]);
 
-  // let index_output = File::create("../search/data/indexes.json").unwrap();
+  // let index_output = File::create("generated/../search/data/indexes.json").unwrap();
   // serde_json::to_writer(&index_output, &indexes);
 
   // let mut build_mappings: Vec<Vec<String>> = vec![];
@@ -384,7 +384,7 @@ fn main() {
   //   build_mappings.push(split_build);
   // }
 
-  // let builds_output = File::create("../search/data/builds.json").unwrap();
+  // let builds_output = File::create("generated/../search/data/builds.json").unwrap();
   // serde_json::to_writer(&builds_output, &build_mappings);
 
   // let mut compressed_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
@@ -393,7 +393,7 @@ fn main() {
   //   ("clusters", ),
   // ]);
 
-  // let mappings_output = File::create("../sc2.gg/src/assets/mappings.json").unwrap();
+  // let mappings_output = File::create("generated/../sc2.gg/src/assets/mappings.json").unwrap();
   // serde_json::to_writer(&mappings_output, &mappings);
 
   println!("replays serialized in {:?}", now.elapsed());

@@ -1,7 +1,9 @@
-use crate::game::Game;
+use crate::game::{Game, GameObject};
 use crate::replay::Event;
 use crate::decoders::DecoderResult;
 use crate::game_state::GameState;
+
+use std::collections::hash_map::Entry;
 
 const UNITS: [&str; 54] = [
   // Protoss
@@ -124,19 +126,27 @@ const BUILDINGS: [&str; 45] = [
   "Extractor",
 ];
 
-pub struct ObjectEvent;
+const ALLOWED_TRANSITIONS: [(&str, &str); 3] = [
+  ("CommandCenter", "OrbitalCommand"),
+  ("Hatchery", "Lair"),
+  ("Lair", "Hive"),
+];
 
-pub struct Object<'a> {
-  type_name: &'a str,
-  object_name: &'a str,
-}
+const TRANSITION_BUILD_TIMES: [(&str, u16); 3] = [
+  ("OrbitalCommand", 560),
+  ("Lair", 1277),
+  ("Hive", 1590),
+];
+
+pub struct ObjectEvent;
 
 const MAX_BUILD_LENGTH: u8 = 15;
 
 impl ObjectEvent {
-  pub fn new(game: &mut Game, state: &mut GameState, event: &Event) -> Result<(), &'static str> {
+  pub fn new(game: &mut Game, state: &mut GameState, event: &Event, event_name: &String) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
-    let mut object = Object { type_name: "", object_name: "" };
+    let mut event_object_name = "";
+    let mut event_object_type = "";
     let mut tag_index = 0;
     let mut tag_recycle = 0;
     let mut current_gameloop = 0;
@@ -149,15 +159,15 @@ impl ObjectEvent {
         } else {
           return Err("Player ID is not a value");
         },
-        "m_unitTypeName" => if let DecoderResult::Blob(object_name) = value {
-          if UNITS.contains(&object_name.as_str()) {
-            object.object_name = object_name;
-            object.type_name = "unit"
+        "m_unitTypeName" => if let DecoderResult::Blob(name) = value {
+          if UNITS.contains(&name.as_str()) {
+            event_object_name = name;
+            event_object_type = "unit"
           }
 
-          if BUILDINGS.contains(&object_name.as_str()) {
-            object.object_name = object_name;
-            object.type_name = "building";
+          if BUILDINGS.contains(&name.as_str()) {
+            event_object_name = name;
+            event_object_type = "building";
           }
         },
         "m_unitTagIndex" => if let DecoderResult::Value(index) = value {
@@ -173,7 +183,13 @@ impl ObjectEvent {
       }
     }
 
-    if object.object_name == "" {
+    if event_name == "NNet.Replay.Tracker.SUnitDiedEvent" {
+      if let Entry::Occupied(game_object) = game.objects.entry(tag_index) {
+        game_object.remove_entry();
+      }
+    }
+
+    if event_object_name == "" {
       return Err("Object name not found");
     }
 
@@ -197,26 +213,55 @@ impl ObjectEvent {
     // }
 
     state.gameloop = current_gameloop;
-    let object_type_state = if object.type_name == "building" {
+    let event_object_type_state = if event_object_type == "building" {
       &mut state.buildings
     } else {
       &mut state.units
     };
-    object_type_state
-      .entry(object.object_name.to_string())
+    event_object_type_state
+      .entry(event_object_name.to_string())
       .and_modify(|count| *count += 1)
       .or_insert(1);
 
+    // let mut game_object = game.fetch_or_create_object_by_id(event_object_name, event_object_type, tag_index, tag_recycle);
+
+    let game_object = game.objects
+      .entry(tag_index)
+      .or_insert(GameObject {
+        object_name: event_object_name.to_string(),
+        object_type: event_object_type.to_string(),
+        tag_index,
+        tag_recycle,
+      });
+    let transition = (game_object.object_name.as_str(), event_object_name);
+    let mut calculated_gameloop = current_gameloop;
+
+    if event_name == "NNet.Replay.Tracker.SUnitTypeChangeEvent" && game_object.object_type == "building" {
+      if ALLOWED_TRANSITIONS.contains(&transition) {
+        game_object.object_name = event_object_name.to_string();
+
+        let transition_object= TRANSITION_BUILD_TIMES
+          .iter()
+          .find(|(name, _)| *name == event_object_name);
+
+        calculated_gameloop = match transition_object {
+          Some((_, transition_gameloops)) => current_gameloop - transition_gameloops,
+          None => current_gameloop,
+        };
+      } else {
+        return Ok(());
+      }
+    }
+
     // 9408 = ~7min, 22.4 gameloops per sec
     if
-      current_gameloop > 0 &&
-      current_gameloop < 9408 &&
-      object.object_name != "" &&
-      object.type_name == "building" &&
-      !(object.object_name.contains("Reactor") || object.object_name.contains("TechLab")) &&
+      calculated_gameloop > 0 &&
+      calculated_gameloop < 9408 &&
+      game_object.object_type == "building" &&
+      !(game_object.object_name.contains("Reactor") || game_object.object_name.contains("TechLab")) &&
       game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize
     {
-      game.builds[player_index as usize].push(object.object_name.to_string());
+      game.builds[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
     }
 
     Ok(())

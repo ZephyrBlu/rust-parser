@@ -21,7 +21,7 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
     "IEM Katowice",
     "TSL",
     "Wardi",
-    "Olimoleague",
+    "OlimoLeague",
     "AlphaX",
     "WESG",
     "WCS",

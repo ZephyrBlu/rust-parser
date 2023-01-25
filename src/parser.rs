@@ -202,10 +202,14 @@ impl<'a> ReplayParser<'a> {
 
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
-    for (replay_build_index, build) in game.builds.iter().enumerate() {
-      replay_builds[replay_build_index] = build.clone();
-      
-      let joined_build = build.join(",");
+    for (replay_build_index, build) in game.builds.iter_mut().enumerate() {
+      build.sort_by(|a, b| a.1.cmp(&b.1));
+      replay_builds[replay_build_index] = build
+        .iter()
+        .map(|(building, _)| building.clone())
+        .collect::<Vec<String>>();
+
+      let joined_build = replay_builds[replay_build_index].join(",");
       match builds.iter().position(|seen_build| &joined_build == seen_build) {
         Some(build_index) => replay_build_mappings[replay_build_index] = build_index as u16,
         None => {
