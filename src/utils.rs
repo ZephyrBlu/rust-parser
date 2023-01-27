@@ -49,12 +49,14 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             }
 
             let content_hash = digest_file(&path).expect("Replay file should be hashed");
+
             // let bucket_path = format!("/Users/lukeholroyd/Desktop/replays/bucket/{content_hash}.SC2Replay");
             // println!("copying replay file to new bucket path: {:?}", bucket_path);
             // copy(
             //   &path,
             //   bucket_path,
             // ).expect("Replay file is copied from existing file structure into bucket structure");
+
             let replay = Replay::new(path, content_hash, tags);
 
             let raw_played_at = &replay.parsed.player_info
@@ -70,10 +72,12 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             // https://en.wikipedia.org/wiki/Epoch_(computing)
             played_at = (played_at / 10000000) - 11644473600;
 
-            // between 1st Jan 2022 and 1st Jan 2023
-            if played_at >= 1640995200 && played_at < 1672531200 {
-              replays.push(replay);
-            }
+            replays.push(replay);
+
+            // // between 1st Jan 2021 and 1st Jan 2022
+            // if played_at >= 1609459200 && played_at < 1640995200 {
+            //   replays.push(replay);
+            // }
           }
         },
         None => continue,

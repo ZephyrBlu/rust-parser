@@ -353,7 +353,7 @@ fn main() {
   let build_token_output = File::create("generated/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);
 
-  File::create("generated/tinybird_sc2.csv").unwrap();
+  File::create("tinybird_sc2.csv").unwrap();
   let mut wtr = Writer::from_path("tinybird_sc2.csv").unwrap();
   for record in tinybird_serialized {
     wtr.serialize(record).unwrap();

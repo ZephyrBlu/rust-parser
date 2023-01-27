@@ -5,9 +5,8 @@ use crate::game_state::GameState;
 
 use std::collections::hash_map::Entry;
 
-const UNITS: [&str; 54] = [
+const UNITS: [&str; 47] = [
   // Protoss
-  "Probe",
   "Zealot",
   "Stalker",
   "Sentry",
@@ -28,8 +27,6 @@ const UNITS: [&str; 54] = [
   "Mothership",
 
   // Terran
-  "SCV",
-  "MULE",
   "Marine",
   "Reaper",
   "Marauder",
@@ -38,11 +35,7 @@ const UNITS: [&str; 54] = [
   "WidowMine",
   "Cyclone",
   "SiegeTank",
-
-  // which does thor spawn as?
   "Thor",
-  "ThorAP",
-
   "VikingFighter",
   "Medivac",
   "Liberator",
@@ -51,14 +44,11 @@ const UNITS: [&str; 54] = [
   "Battlecruiser",
 
   // Zerg
-  "Drone",
-  "Overlord",
   "Queen",
   "Zergling",
   "Baneling",
   "Roach",
   "Ravager",
-  "Overseer",
   "Hydralisk",
   "LurkerMP",
   "Mutalisk",
@@ -126,21 +116,40 @@ const BUILDINGS: [&str; 45] = [
   "Extractor",
 ];
 
-const ALLOWED_TRANSITIONS: [(&str, &str); 3] = [
+const ALLOWED_TRANSITIONS: [(&str, &str); 9] = [
+  // buildings
   ("CommandCenter", "OrbitalCommand"),
+  ("CommandCenter", "PlanetaryFortress"),
   ("Hatchery", "Lair"),
   ("Lair", "Hive"),
+  ("Spire", "GreaterSpire"),
+
+  // units
+  ("Zergling", "Baneling"),
+  ("Roach", "Ravager"),
+  ("Hydralisk", "LurkerMP"),
+  ("Corruptor", "BroodLord"),
 ];
 
-const TRANSITION_BUILD_TIMES: [(&str, u16); 3] = [
+const TRANSITION_BUILD_TIMES: [(&str, u16); 9] = [
+  // buildings
   ("OrbitalCommand", 560),
+  ("PlanetaryFortress", 807),
   ("Lair", 1277),
   ("Hive", 1590),
+  ("GreaterSpire", 1591),
+
+  // units
+  ("Zergling", 314),
+  ("Roach", 269),
+  ("Hydralisk", 404),
+  ("Corruptor", 538),
 ];
 
 pub struct ObjectEvent;
 
 const MAX_BUILD_LENGTH: u8 = 15;
+const MAX_UNIT_BUILD_LENGTH: u8 = 30;
 
 impl ObjectEvent {
   pub fn new(game: &mut Game, state: &mut GameState, event: &Event, event_name: &String) -> Result<(), &'static str> {
@@ -223,8 +232,6 @@ impl ObjectEvent {
       .and_modify(|count| *count += 1)
       .or_insert(1);
 
-    // let mut game_object = game.fetch_or_create_object_by_id(event_object_name, event_object_type, tag_index, tag_recycle);
-
     let game_object = game.objects
       .entry(tag_index)
       .or_insert(GameObject {
@@ -236,7 +243,7 @@ impl ObjectEvent {
     let transition = (game_object.object_name.as_str(), event_object_name);
     let mut calculated_gameloop = current_gameloop;
 
-    if event_name == "NNet.Replay.Tracker.SUnitTypeChangeEvent" && game_object.object_type == "building" {
+    if event_name == "NNet.Replay.Tracker.SUnitTypeChangeEvent" {
       if ALLOWED_TRANSITIONS.contains(&transition) {
         game_object.object_name = event_object_name.to_string();
 
@@ -256,12 +263,20 @@ impl ObjectEvent {
     // 9408 = ~7min, 22.4 gameloops per sec
     if
       calculated_gameloop > 0 &&
-      calculated_gameloop < 9408 &&
-      game_object.object_type == "building" &&
-      !(game_object.object_name.contains("Reactor") || game_object.object_name.contains("TechLab")) &&
-      game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize
+      calculated_gameloop < 9408
     {
-      game.builds[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
+      if game_object.object_type == "building" &&
+        !(game_object.object_name.contains("Reactor") || game_object.object_name.contains("TechLab")) &&
+        game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize
+      {
+        game.builds[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
+      }
+
+      if game_object.object_type == "unit" &&
+        game.units[player_index as usize].len() < MAX_UNIT_BUILD_LENGTH as usize
+      {
+        game.units[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
+      }
     }
 
     Ok(())

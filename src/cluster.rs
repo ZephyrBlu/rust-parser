@@ -235,7 +235,6 @@ impl RadixTree {
   }
 
   pub fn prune(&mut self) {
-    // self.root.prune(100, 20, 20);
     self.root.prune(5, 0);
   }
 }
