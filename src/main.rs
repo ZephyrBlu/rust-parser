@@ -16,7 +16,7 @@ use crate::parser::ReplayParser;
 use crate::replay::Replay;
 use crate::index::Index;
 use crate::utils::visit_dirs;
-use crate::builds::Builds;
+use crate::builds::{Builds, BuildCount};
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -54,6 +54,8 @@ pub enum ReplayEntry<'a> {
   Players(Vec<Player>),
   Builds([Vec<String>; 2]),
   BuildMappings([u16; 2]),
+  Units([Vec<String>; 2]),
+  UnitsMappings([u16; 2]),
   Winner(u8),
   GameLength(u16),
   Map(String),
@@ -106,6 +108,7 @@ fn main() {
 
   let replay_summaries: Vec<ReplaySummary> = vec![];
   let mut replay_builds: Vec<String> = vec![];
+  let mut replay_units: Vec<String> = vec![];
   let mut result = SerializedReplays {
     replays: replay_summaries,
   };
@@ -133,6 +136,7 @@ fn main() {
     let mut replay_summary = match replay_parser.parse_replay(
       replay,
       &mut replay_builds,
+      &mut replay_units,
     ) {
       Ok(summary) => summary,
       Err(e) => {
@@ -193,13 +197,53 @@ fn main() {
           // println!("Build has less than 3 buildings: {:?}", player_build);
           continue;
         }
+      }
+    }
 
-        // // println!("Full build: {:?}", player_build);
-        // for i in 0..(player_build.len() - 2) {
-        //   let trigram = &player_build[i..(i + 3)];
-        //   // println!("Generated trigram: {:?}", trigram);
-        //   build_index.add(trigram.join(","), replay_id as u32);
-        // }
+    if let ReplayEntry::UnitsMappings(units) = replay_summary.get("units_mappings").unwrap() {
+      let matchup_prefix = matchup.join(",");
+      for (p_id, player_unit_index) in units.iter().enumerate() {
+        let player_units: Vec<String> = replay_units[*player_unit_index as usize].split(",").map(|s| s.to_string()).collect();
+        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+
+        let mut win = false;
+        if let ReplayEntry::Winner(winner_id) = replay_summary.get("winner").unwrap() {
+          win = (p_id + 1) == *winner_id as usize;
+        }
+
+        build_tokens.units
+          .entry(format!(
+            "{token_prefix}__{}",
+            player_units.join(",")
+          ))
+          .and_modify(|units_count| {
+            units_count.total += 1;
+            if win {
+              units_count.wins += 1;
+            } else {
+              units_count.losses += 1;
+            }
+          })
+          .or_insert_with(|| {
+            let mut units = BuildCount {
+              total: 1,
+              wins: 0,
+              losses: 0,
+            };
+    
+            if win {
+              units.wins += 1;
+            } else {
+              units.losses += 1;
+            }
+    
+            units
+          });
+
+        if player_units.len() <= 3 {
+          // println!("Build has less than 3 buildings: {:?}", player_build);
+          continue;
+        }
       }
     }
 
@@ -208,37 +252,37 @@ fn main() {
     replay_id += 1;
   }
 
-  let distribution_time = now.elapsed();
-  build_tokens.generate_token_distributions();
-  println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
+  // let distribution_time = now.elapsed();
+  // build_tokens.generate_token_distributions();
+  // println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
 
-  let token_path_time = now.elapsed();
-  let mut skipped_builds = 0;
-  for replay_summary in &result.replays {
-    let mut races = vec![];
-    let mut matchup = vec![];
-    if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
-      for player in players {
-        races.push(player.race.clone());
-        matchup.push(player.race.clone());
-      }
-    }
-    matchup.sort();
+  // let token_path_time = now.elapsed();
+  // let mut skipped_builds = 0;
+  // for replay_summary in &result.replays {
+  //   let mut races = vec![];
+  //   let mut matchup = vec![];
+  //   if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
+  //     for player in players {
+  //       races.push(player.race.clone());
+  //       matchup.push(player.race.clone());
+  //     }
+  //   }
+  //   matchup.sort();
 
-    // if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-    //   let matchup_prefix = matchup.join(",");
-    //   for (p_id, player_build) in builds.iter().enumerate() {
-    //     if player_build.len() <= 3 {
-    //       // println!("Build has less than 3 buildings: {:?}", player_build);
-    //       skipped_builds += 1;
-    //       continue;
-    //     }
+  //   // if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
+  //   //   let matchup_prefix = matchup.join(",");
+  //   //   for (p_id, player_build) in builds.iter().enumerate() {
+  //   //     if player_build.len() <= 3 {
+  //   //       // println!("Build has less than 3 buildings: {:?}", player_build);
+  //   //       skipped_builds += 1;
+  //   //       continue;
+  //   //     }
 
-    //     let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-    //     build_tokens.generate_token_paths(&player_build, build_prefix);
-    //   }
-    // }
-  }
+  //   //     let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+  //   //     build_tokens.generate_token_paths(&player_build, build_prefix);
+  //   //   }
+  //   // }
+  // }
 
   // // sort by token path probabilities
   // build_tokens.token_paths

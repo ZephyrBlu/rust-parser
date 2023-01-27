@@ -48,6 +48,7 @@ impl BuildCount {
 
 pub struct Builds {
   pub builds: HashMap<String, BuildCount>,
+  pub units: HashMap<String, BuildCount>,
   pub players: HashSet<String>,
   tokens: HashMap<String, u32>,
   cached_token_probability: HashMap<String, f32>,
@@ -83,6 +84,7 @@ impl Builds {
   pub fn new() -> Builds {
     Builds {
       builds: HashMap::new(),
+      units: HashMap::new(),
       players: HashSet::new(),
       tokens: HashMap::new(),
       cached_token_probability: HashMap::new(),
@@ -186,7 +188,7 @@ impl Builds {
   }
 
   pub fn generate_matchup_unit_trees(&mut self) {
-    for (raw_units, units_count) in &self.builds {
+    for (raw_units, units_count) in &self.units {
       let deconstructed_units: Vec<&str> = raw_units.split(SECTION_SEPARATOR).collect();
       let matchup = deconstructed_units[0];
       let units = deconstructed_units[1];
