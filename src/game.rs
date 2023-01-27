@@ -18,6 +18,7 @@ pub struct Game {
   pub unspent_resources: Vec<Vec<(u16, u16)>>,
   pub builds: Vec<Vec<(String, u16)>>,
   pub buildings: HashMap<u32, u8>,
+  pub units: Vec<Vec<(String, u16)>>,
   pub objects: HashMap<u32, GameObject>,
 }
 
@@ -32,6 +33,7 @@ impl Game {
     let unspent_resources: Vec<Vec<(u16, u16)>> = vec![vec![], vec![]];
     let builds: Vec<Vec<(String, u16)>> = vec![vec![], vec![]];
     let buildings: HashMap<u32, u8> = HashMap::new();
+    let units: Vec<Vec<(String, u16)>> = vec![vec![], vec![]];
     let objects: HashMap<u32, GameObject> = HashMap::new();
 
     Game {
@@ -44,6 +46,7 @@ impl Game {
       unspent_resources,
       builds,
       buildings,
+      units,
       objects,
     }
   }

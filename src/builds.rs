@@ -60,6 +60,7 @@ pub struct Builds {
   pub build_clusters: HashMap<String, Cluster>,
   pub build_tree: HashMap<String, RadixTree>,
   pub raw_build_tree: HashMap<String, RadixTree>,
+  pub raw_unit_tree: HashMap<String, RadixTree>,
   pub player_trees: HashMap<String, RadixTree>,
 }
 
@@ -94,6 +95,7 @@ impl Builds {
       build_clusters: HashMap::new(),
       build_tree: HashMap::new(),
       raw_build_tree: HashMap::new(),
+      raw_unit_tree: HashMap::new(),
       player_trees: HashMap::new(),
     }
   }
@@ -179,6 +181,23 @@ impl Builds {
     }
 
     for (_, tree) in &mut self.raw_build_tree {
+      tree.prune();
+    }
+  }
+
+  pub fn generate_matchup_unit_trees(&mut self) {
+    for (raw_units, units_count) in &self.builds {
+      let deconstructed_units: Vec<&str> = raw_units.split(SECTION_SEPARATOR).collect();
+      let matchup = deconstructed_units[0];
+      let units = deconstructed_units[1];
+
+      self.raw_unit_tree
+        .entry(matchup.to_string())
+        .and_modify(|matchup_tree| matchup_tree.insert(units, units_count.clone()))
+        .or_insert(RadixTree::from(units, units_count.clone()));
+    }
+
+    for (_, tree) in &mut self.raw_unit_tree {
       tree.prune();
     }
   }
