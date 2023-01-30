@@ -1,5 +1,7 @@
-use crate::{Player, ReplaySummary, ReplayEntry, SummaryStat, TinybirdGame};
-use crate::replay::{Parsed, Metadata, Replay};
+use serde::Serialize;
+
+use crate::{Player, SummaryStat, TinybirdGame};
+use crate::replay::{Metadata, Replay};
 use crate::game::Game;
 use crate::events::EventParser;
 use crate::decoders::DecoderResult;
@@ -10,6 +12,21 @@ pub type RaceMappings<'a> = HashMap<&'a str, &'a str>;
 
 pub struct ReplayParser<'a> {
   race_mappings: RaceMappings<'a>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ReplaySummary {
+  pub players: Vec<Player>,
+  pub builds: [Vec<String>; 2],
+  pub build_mappings: [u16; 2],
+  pub units: [Vec<String>; 2],
+  pub unit_mappings: [u16; 2],
+  pub winner: u8,
+  pub game_length: u16,
+  pub map: String,
+  pub played_at: u64,
+  pub tags: String,
+  pub tinybird: TinybirdGame,
 }
 
 impl<'a> ReplayParser<'a> {
@@ -105,8 +122,6 @@ impl<'a> ReplayParser<'a> {
       summary_stats.insert((player_index + 1) as u8, player_summary_stats);
     }
 
-    // println!("player info {:?}", &replay.player_info);
-
     let parsed_metadata: Metadata = serde_json::from_str(&replay.metadata).unwrap();
 
     let winner = match parsed_metadata.Players
@@ -121,7 +136,7 @@ impl<'a> ReplayParser<'a> {
       .iter()
       .find(|(field, _)| *field == "m_title")
       .unwrap().1;
-    let mut map = String::new();
+    let mut map = "";
     if let DecoderResult::Blob(value) = raw_map {
       map = value
         .trim_start_matches("[M] ")
@@ -132,8 +147,7 @@ impl<'a> ReplayParser<'a> {
         .trim_start_matches("[TLMC15] ")
         .trim_start_matches("[TLMC16] ")
         .trim_start_matches("[TLMC17] ")
-        .trim_end_matches(" LE")
-        .to_string();
+        .trim_end_matches(" LE");
     }
 
     let raw_played_at = &replay.player_info
@@ -211,7 +225,7 @@ impl<'a> ReplayParser<'a> {
       build.sort_by(|a, b| a.1.cmp(&b.1));
       replay_builds[replay_build_index] = build
         .iter()
-        .map(|(building, _)| building.clone())
+        .map(|(building, _)| building.to_owned())
         .collect::<Vec<String>>();
 
       let joined_build = replay_builds[replay_build_index].join(",");
@@ -230,7 +244,7 @@ impl<'a> ReplayParser<'a> {
       unit.sort_by(|a, b| a.1.cmp(&b.1));
       replay_units[replay_unit_index] = unit
         .iter()
-        .map(|(unit, _)| unit.clone())
+        .map(|(unit, _)| unit.to_owned())
         .collect::<Vec<String>>();
 
       let joined_units = replay_units[replay_unit_index].join(",");
@@ -269,13 +283,13 @@ impl<'a> ReplayParser<'a> {
     let winner_build = replay_builds[(winner - 1) as usize]
       .iter()
       .filter(|building| !GAS_BUILDINGS.contains(&building.as_str()))
-      .map(|building| building.clone())
+      .map(|building| building.to_string())
       .collect::<Vec<String>>()
       .join(",");
     let loser_build = replay_builds[(loser - 1) as usize]
       .iter()
       .filter(|building| !GAS_BUILDINGS.contains(&building.as_str()))
-      .map(|building| building.clone())
+      .map(|building| building.to_string())
       .collect::<Vec<String>>()
       .join(",");
 
@@ -284,36 +298,34 @@ impl<'a> ReplayParser<'a> {
       winner_id: winner,
       winner_name: players[(winner - 1) as usize].name.clone(),
       winner_race: players[(winner - 1) as usize].race.clone(),
-      winner_build,
+      winner_build: winner_build.clone(),
       loser_id: loser,
       loser_name: players[(loser - 1) as usize].name.clone(),
       loser_race: players[(loser - 1) as usize].race.clone(),
-      loser_build,
+      loser_build: loser_build.clone(),
       matchup: serialized_matchup.join(""),
       player_names: serialized_players.join(""),
       players: serde_json::to_string(&players).unwrap(),
       builds: serde_json::to_string(&replay_builds).unwrap(),
-      map: map.clone(),
+      map: map.to_owned(),
       game_length,
       played_at,
       event: replay.tags.clone(),
     };
 
-    let replay_summary: ReplaySummary = HashMap::from([
-      ("players", ReplayEntry::Players(players)),
-      ("builds", ReplayEntry::Builds(replay_builds)),
-      ("build_mappings", ReplayEntry::BuildMappings(replay_build_mappings)),
-      ("units", ReplayEntry::Units(replay_units)),
-      ("units_mappings", ReplayEntry::UnitsMappings(replay_units_mappings)),
-      ("winner", ReplayEntry::Winner(winner)),
-      ("game_length", ReplayEntry::GameLength(game_length)),
-      ("map", ReplayEntry::Map(map)),
-      ("played_at", ReplayEntry::PlayedAt(played_at)),
-      // ("summary_stats", ReplayEntry::SummaryStats(summary_stats)),
-      // timeline
-      ("metadata", ReplayEntry::Metadata(tags)),
-      ("tinybird", ReplayEntry::Tinybird(tinybird_game)),
-    ]);
+    let replay_summary: ReplaySummary = ReplaySummary {
+      players,
+      builds: replay_builds,
+      build_mappings: replay_build_mappings,
+      units: replay_units,
+      unit_mappings: replay_units_mappings,
+      winner,
+      game_length,
+      map: map.to_owned(),
+      played_at,
+      tags: tags.clone(),
+      tinybird: tinybird_game,
+    };
 
     Ok(replay_summary)
   }

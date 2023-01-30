@@ -2,24 +2,21 @@ mod decoders;
 mod protocol;
 mod mpq;
 mod replay;
-mod index;
 mod events;
 mod utils;
 mod game;
 mod parser;
 mod builds;
-mod search;
 mod cluster;
 mod game_state;
 
-use crate::parser::ReplayParser;
+use crate::parser::{ReplayParser, ReplaySummary};
 use crate::replay::Replay;
-use crate::index::Index;
 use crate::utils::visit_dirs;
 use crate::builds::{Builds, BuildCount};
 
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs::File;
 use std::path::Path;
 use csv::Writer;
@@ -43,34 +40,11 @@ pub struct Player {
   id: u8,
   name: String,
   race: String,
-  // build: Vec<String>,
 }
 
 #[derive(Serialize)]
-#[serde(untagged)]
-pub enum ReplayEntry<'a> {
-  Id(u32),
-  ContentHash(String),
-  Players(Vec<Player>),
-  Builds([Vec<String>; 2]),
-  BuildMappings([u16; 2]),
-  Units([Vec<String>; 2]),
-  UnitsMappings([u16; 2]),
-  Winner(u8),
-  GameLength(u16),
-  Map(String),
-  PlayedAt(u64),
-  SummaryStats(HashMap<u8, HashMap<&'a str, SummaryStat>>),
-  Metadata(String),
-  Tinybird(TinybirdGame),
-}
-
-type ReplaySummary<'a> = HashMap<&'a str, ReplayEntry<'a>>;
-
-#[derive(Serialize)]
-struct SerializedReplays<'a> {
-  #[serde(borrow)]
-  replays: Vec<ReplaySummary<'a>>,
+struct SerializedReplays {
+  replays: Vec<ReplaySummary>,
 }
 
 #[derive(Clone, Serialize)]
@@ -142,7 +116,6 @@ fn main() {
 
   let mut tinybird_serialized: Vec<TinybirdGame> = vec![];
 
-  let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
 
   let mut build_tokens = Builds::new();
@@ -154,7 +127,7 @@ fn main() {
       continue;
     }
 
-    let mut replay_summary = match replay_parser.parse_replay(
+    let replay_summary = match replay_parser.parse_replay(
       replay,
       &mut replay_builds,
       &mut replay_units,
@@ -165,106 +138,81 @@ fn main() {
         continue;
       },
     };
-    replay_summary.insert("id", ReplayEntry::Id(replay_id));
-    replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
-    if let ReplayEntry::Map(map) = replay_summary.get("map").unwrap() {
-      map_index.add_id(map.to_lowercase().clone(), replay_id);
-      map_index.add_hash(map.to_lowercase().clone(), content_hash.clone());
-    }
+    // replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
-    if let ReplayEntry::Metadata(metadata) = replay_summary.get("metadata").unwrap() {
-      for tag in metadata.split(",") {
-        metadata_index.add_id(tag.to_lowercase().to_string(), replay_id);
-        metadata_index.add_hash(tag.to_lowercase().to_string(), content_hash.clone());
-      }
-    }
-
-    if let ReplayEntry::Tinybird(tinybird) = replay_summary.get("tinybird").unwrap() {
-      if tinybird.winner_build != "" && tinybird.loser_build != "" {
-        tinybird_serialized.push(tinybird.clone());
-      }
+    if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
+      tinybird_serialized.push(replay_summary.tinybird.clone());
     }
 
     let mut races = vec![];
     let mut matchup = vec![];
-    if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
-      for player in players {
-        races.push(player.race.clone());
-        matchup.push(player.race.clone());
-      }
+    for player in &replay_summary.players {
+      races.push(player.race.clone());
+      matchup.push(player.race.clone());
     }
     matchup.sort();
 
-    if let ReplayEntry::BuildMappings(builds) = replay_summary.get("build_mappings").unwrap() {
-      let matchup_prefix = matchup.join(",");
-      for (p_id, player_build_index) in builds.iter().enumerate() {
-        let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
-        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+    let matchup_prefix = matchup.join(",");
+    for (p_id, player_build_index) in replay_summary.build_mappings.iter().enumerate() {
+      let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
+      let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
 
-        let mut win = false;
-        if let ReplayEntry::Winner(winner_id) = replay_summary.get("winner").unwrap() {
-          win = (p_id + 1) == *winner_id as usize;
-        }
-        build_tokens.generate_tokens(&player_build, win, token_prefix);
+      let mut win = false;
+      win = (p_id + 1) == replay_summary.winner as usize;
+      build_tokens.generate_tokens(&player_build, win, token_prefix);
 
-        if player_build.len() <= 3 {
-          // println!("Build has less than 3 buildings: {:?}", player_build);
-          continue;
-        }
+      if player_build.len() <= 3 {
+        // println!("Build has less than 3 buildings: {:?}", player_build);
+        continue;
       }
     }
 
-    if let ReplayEntry::UnitsMappings(units) = replay_summary.get("units_mappings").unwrap() {
-      let matchup_prefix = matchup.join(",");
-      for (p_id, player_unit_index) in units.iter().enumerate() {
-        let player_units: Vec<String> = replay_units[*player_unit_index as usize].split(",").map(|s| s.to_string()).collect();
-        let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+    let matchup_prefix = matchup.join(",");
+    for (p_id, player_unit_index) in replay_summary.unit_mappings.iter().enumerate() {
+      let player_units: Vec<String> = replay_units[*player_unit_index as usize].split(",").map(|s| s.to_string()).collect();
+      let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
 
-        let mut win = false;
-        if let ReplayEntry::Winner(winner_id) = replay_summary.get("winner").unwrap() {
-          win = (p_id + 1) == *winner_id as usize;
-        }
+      let mut win = false;
+      win = (p_id + 1) == replay_summary.winner as usize;
 
-        build_tokens.units
-          .entry(format!(
-            "{token_prefix}__{}",
-            player_units.join(",")
-          ))
-          .and_modify(|units_count| {
-            units_count.total += 1;
-            if win {
-              units_count.wins += 1;
-            } else {
-              units_count.losses += 1;
-            }
-          })
-          .or_insert_with(|| {
-            let mut units = BuildCount {
-              total: 1,
-              wins: 0,
-              losses: 0,
-            };
-    
-            if win {
-              units.wins += 1;
-            } else {
-              units.losses += 1;
-            }
-    
-            units
-          });
+      build_tokens.units
+        .entry(format!(
+          "{token_prefix}__{}",
+          player_units.join(",")
+        ))
+        .and_modify(|units_count| {
+          units_count.total += 1;
+          if win {
+            units_count.wins += 1;
+          } else {
+            units_count.losses += 1;
+          }
+        })
+        .or_insert_with(|| {
+          let mut units = BuildCount {
+            total: 1,
+            wins: 0,
+            losses: 0,
+          };
+  
+          if win {
+            units.wins += 1;
+          } else {
+            units.losses += 1;
+          }
+  
+          units
+        });
 
-        if player_units.len() <= 3 {
-          // println!("Build has less than 3 buildings: {:?}", player_build);
-          continue;
-        }
+      if player_units.len() <= 3 {
+        // println!("Build has less than 3 buildings: {:?}", player_build);
+        continue;
       }
     }
 
     result.replays.push(replay_summary);
     seen_replays.insert(content_hash);
-    replay_id += 1;
   }
 
   build_tokens.generate_matchup_build_trees();
@@ -272,38 +220,21 @@ fn main() {
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
-  let players_output = File::create("generated/players.json").unwrap();
-  serde_json::to_writer(&players_output, &build_tokens.players);
-
-  let mut mapped_replays = HashMap::new();
-  for replay in &result.replays {
-    if let ReplayEntry::ContentHash(value) = replay.get("content_hash").unwrap() {
-      mapped_replays.insert(value, replay);
-    }
-  }
-  let replay_output = File::create("generated/replays.json").unwrap();
-  serde_json::to_writer(&replay_output, &mapped_replays);
-
-  let token_probability_output = File::create("generated/probability.json").unwrap();
-  serde_json::to_writer(&token_probability_output, &build_tokens.probability);
+  // let mut mapped_replays = HashMap::new();
+  // for replay in &result.replays {
+  //   mapped_replays.insert(replay.content_hash, replay);
+  // }
+  // let replay_output = File::create("generated/replays.json").unwrap();
+  // serde_json::to_writer(&replay_output, &mapped_replays);
 
   let build_output = File::create("generated/builds.json").unwrap();
   serde_json::to_writer(&build_output, &build_tokens.builds);
-
-  let cluster_output = File::create("generated/clusters.json").unwrap();
-  serde_json::to_writer(&cluster_output, &build_tokens.build_clusters);
-
-  let tree_output = File::create("generated/build_tree.json").unwrap();
-  serde_json::to_writer(&tree_output, &build_tokens.build_tree);
 
   let raw_build_tree_output = File::create("generated/raw_build_tree.json").unwrap();
   serde_json::to_writer(&raw_build_tree_output, &build_tokens.raw_build_tree);
 
   let raw_unit_tree_output = File::create("generated/raw_unit_tree.json").unwrap();
   serde_json::to_writer(&raw_unit_tree_output, &build_tokens.raw_unit_tree);
-
-  let player_trees_output = File::create("generated/player_trees.json").unwrap();
-  serde_json::to_writer(&player_trees_output, &build_tokens.player_trees);
 
   let build_token_output = File::create("generated/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);

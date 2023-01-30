@@ -62,7 +62,6 @@ pub struct Builds {
   pub build_tree: HashMap<String, RadixTree>,
   pub raw_build_tree: HashMap<String, RadixTree>,
   pub raw_unit_tree: HashMap<String, RadixTree>,
-  pub player_trees: HashMap<String, RadixTree>,
 }
 
 const MAX_TOKEN_SIZE: usize = 5;
@@ -98,7 +97,6 @@ impl Builds {
       build_tree: HashMap::new(),
       raw_build_tree: HashMap::new(),
       raw_unit_tree: HashMap::new(),
-      player_trees: HashMap::new(),
     }
   }
 
