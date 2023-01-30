@@ -150,6 +150,7 @@ pub struct ObjectEvent;
 
 const MAX_BUILD_LENGTH: u8 = 15;
 const MAX_UNIT_BUILD_LENGTH: u8 = 30;
+const MAX_UNIT_TYPES: u8 = 10;
 
 impl ObjectEvent {
   pub fn new(game: &mut Game, state: &mut GameState, event: &Event, event_name: &String) -> Result<(), &'static str> {

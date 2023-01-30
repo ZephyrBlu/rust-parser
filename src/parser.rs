@@ -36,7 +36,12 @@ impl<'a> ReplayParser<'a> {
     }
   }
 
-  pub fn parse_replay(&'a self, raw_replay: Replay, builds: &mut Vec<String>, units: &mut Vec<String>) -> Result<ReplaySummary, &'static str> {
+  pub fn parse_replay(
+    &'a self,
+    raw_replay: Replay,
+    builds: &mut Vec<String>,
+    units: &mut Vec<String>,
+  ) -> Result<ReplaySummary, &'static str> {
     let replay = raw_replay.parsed;
     let tags = replay.tags.clone();
 

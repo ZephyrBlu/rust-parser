@@ -94,6 +94,33 @@ pub struct TinybirdGame {
   event: String,
 }
 
+#[derive(Clone, Serialize)]
+pub struct TinybirdTimelineEntry<'a> {
+  content_hash: &'a str,
+  gameloop: u16,
+  win: bool,
+  player_name: &'a str,
+  player_race: &'a str,
+  player_build: &'a str,
+  player_collection_rate: u16,
+  player_army_value: u16,
+  player_workers_active: u16,
+  player_workers_lost: u16,
+  player_workers_killed: u16,
+  opponent_name: &'a str,
+  opponent_race: &'a str,
+  opponent_build: &'a str,
+  opponent_collection_rate: u16,
+  opponent_army_value: u16,
+  opponent_workers_active: u16,
+  opponent_workers_lost: u16,
+  opponent_workers_killed: u16,
+  matchup: &'a str,
+  map: &'a str,
+  event: &'a str,
+  game_length: u16,
+}
+
 fn main() {
   let now = Instant::now();
 
