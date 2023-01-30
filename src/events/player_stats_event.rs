@@ -15,9 +15,11 @@ impl PlayerStatsEvent {
   ) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
     let mut gameloop: u16 = 0;
+    let mut timeline_entry: TinybirdTimelineEntry = Default::default();
+
     for (field, value) in &event.entries {
       match field.as_str() {
-        "m_gameloop" => gameloop = if let DecoderResult::Value(v) = value {
+        "_gameloop" => gameloop = if let DecoderResult::Value(v) = value {
           *v as u16
         } else {
           return Err("No gameloop present");
@@ -120,7 +122,6 @@ impl PlayerStatsEvent {
 
           let mut timeline_state: TinybirdTimelineEntry = TinybirdTimelineEntry {
             content_hash: context.content_hash.clone(),
-            gameloop,
             win: context.winner_id == player_id,
             player_name: context.players[player_index].name.clone(),
             player_race: context.players[player_index].race.clone(),
@@ -136,29 +137,35 @@ impl PlayerStatsEvent {
             game_length: context.game_length,
             ..Default::default()
           };
-          if let Some(previous_timeline_entry) = timeline.last_mut() {
-            if previous_timeline_entry.gameloop == gameloop {
-              timeline_state.opponent_name = previous_timeline_entry.player_name.clone();
-              timeline_state.opponent_race = previous_timeline_entry.player_race.clone();
-              timeline_state.opponent_collection_rate = previous_timeline_entry.player_collection_rate.clone();
-              timeline_state.opponent_army_value = previous_timeline_entry.player_army_value.clone();
-              timeline_state.opponent_workers_active = previous_timeline_entry.player_workers_active.clone();
 
-              previous_timeline_entry.opponent_name = timeline_state.player_name.clone();
-              previous_timeline_entry.opponent_race = timeline_state.player_race.clone();
-              previous_timeline_entry.opponent_collection_rate = timeline_state.player_collection_rate.clone();
-              previous_timeline_entry.opponent_army_value = timeline_state.player_army_value.clone();
-              previous_timeline_entry.opponent_workers_active = timeline_state.player_workers_active.clone();
-            }
-          }
-
-          timeline.push(timeline_state);
+          timeline_entry = timeline_state;
         } else {
           panic!("didn't find struct {:?}",  value);
         },
         _other => continue,
       }
     }
+
+    // event might be encountered before gameloop
+    timeline_entry.gameloop = gameloop;
+
+    if let Some(previous_timeline_entry) = timeline.last_mut() {
+      if previous_timeline_entry.gameloop == gameloop {
+        timeline_entry.opponent_name = previous_timeline_entry.player_name.clone();
+        timeline_entry.opponent_race = previous_timeline_entry.player_race.clone();
+        timeline_entry.opponent_collection_rate = previous_timeline_entry.player_collection_rate.clone();
+        timeline_entry.opponent_army_value = previous_timeline_entry.player_army_value.clone();
+        timeline_entry.opponent_workers_active = previous_timeline_entry.player_workers_active.clone();
+
+        previous_timeline_entry.opponent_name = timeline_entry.player_name.clone();
+        previous_timeline_entry.opponent_race = timeline_entry.player_race.clone();
+        previous_timeline_entry.opponent_collection_rate = timeline_entry.player_collection_rate.clone();
+        previous_timeline_entry.opponent_army_value = timeline_entry.player_army_value.clone();
+        previous_timeline_entry.opponent_workers_active = timeline_entry.player_workers_active.clone();
+      }
+    }
+
+    timeline.push(timeline_entry);
 
     Ok(())
   }

@@ -68,7 +68,7 @@ pub struct TinybirdGame {
   event: String,
 }
 
-#[derive(Default, Clone, Serialize)]
+#[derive(Default, Debug, Clone, Serialize)]
 pub struct TinybirdTimelineEntry {
   content_hash: String,
   gameloop: u16,
@@ -99,7 +99,7 @@ fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/Projects/rust-parser/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -248,7 +248,7 @@ fn main() {
   }
   wtr.flush().unwrap();
 
-  File::create("tinybird_sc2.csv").unwrap();
+  File::create("tinybird_sc2_timelines.csv").unwrap();
   let mut wtr = Writer::from_path("tinybird_sc2_timelines.csv").unwrap();
   for record in &tinybird_timelines {
     wtr.serialize(record).unwrap();
