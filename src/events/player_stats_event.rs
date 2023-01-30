@@ -120,9 +120,15 @@ impl PlayerStatsEvent {
           game.collection_rate[player_index].push((event_minerals_collection_rate, event_gas_collection_rate));
           game.unspent_resources[player_index].push((event_minerals_unspent_resources, event_gas_unspent_resources));
 
+          let win = if context.winner_id == player_id {
+            1
+          } else {
+            0
+          };
+
           let timeline_state: TinybirdTimelineEntry = TinybirdTimelineEntry {
             content_hash: context.content_hash.clone(),
-            win: context.winner_id == player_id,
+            win,
             player_name: context.players[player_index].name.clone(),
             player_race: context.players[player_index].race.clone(),
             // player_build: context.players[player_index].build,

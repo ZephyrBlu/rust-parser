@@ -82,7 +82,7 @@ impl Node {
     let mut new_node = Node::new(
       new_node_label.join(","),
       self.value.clone(),
-      self.value.clone(),
+      self.total.clone(),
     );
     swap(&mut new_node.children, &mut self.children);
 

@@ -72,7 +72,8 @@ pub struct TinybirdGame {
 pub struct TinybirdTimelineEntry {
   content_hash: String,
   gameloop: u16,
-  win: bool,
+  // win: bool,
+  win: u8,
   player_name: String,
   player_race: String,
   // player_build: String,

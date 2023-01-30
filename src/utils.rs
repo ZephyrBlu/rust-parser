@@ -80,7 +80,7 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             // // 1st Jan 2020 1577836800
             // // 1st Jan 2019 1546300800
             // // 1st Jan 2018 1514764800
-            if played_at >= 1640995200 && played_at < 1672531200 {
+            if played_at >= 1640995200 {
               replays.push(replay);
             }
           }
