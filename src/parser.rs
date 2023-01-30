@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{Player, SummaryStat, TinybirdGame};
+use crate::{Player, SummaryStat, TinybirdGame, TinybirdTimelineEntry};
 use crate::replay::{Metadata, Replay};
 use crate::game::Game;
 use crate::events::EventParser;
@@ -27,6 +27,18 @@ pub struct ReplaySummary {
   pub played_at: u64,
   pub tags: String,
   pub tinybird: TinybirdGame,
+  pub timeline: Vec<TinybirdTimelineEntry>,
+}
+
+pub struct TimelineContext {
+  pub content_hash: String,
+  pub players: Vec<Player>,
+  pub winner_id: u8,
+  pub map: String,
+  pub event: String,
+  pub matchup: String,
+  pub game_length: u16,
+  pub played_at: u64,
 }
 
 impl<'a> ReplayParser<'a> {
@@ -61,66 +73,6 @@ impl<'a> ReplayParser<'a> {
   ) -> Result<ReplaySummary, &'static str> {
     let replay = raw_replay.parsed;
     let tags = replay.tags.clone();
-
-    let mut game = Game::new();
-    let mut event_parser = EventParser::new(&replay, &mut game);
-
-    for event in &replay.tracker_events {
-      if let Err(e) = event_parser.parse(event) {
-        println!("event parsing failed: {:?}\n", e);
-        continue;
-      }
-    }
-
-    let resources_collected: [(u16, u16); 2] = [
-      (game.minerals_collected[0], game.gas_collected[0]),
-      (game.minerals_collected[1], game.gas_collected[1]),
-    ];
-    let resources_lost: [(u16, u16); 2] = [
-      (game.minerals_lost[1], game.gas_lost[1]),
-      (game.minerals_lost[0], game.gas_lost[0]),
-    ];
-
-    let mut avg_collection_rate: [(u16, u16); 2] = [(0, 0), (0, 0)];
-    for (index, player_collection_rate) in game.collection_rate.iter().enumerate() {
-      let mut player_total_collection_rate: [u64; 2] = [0, 0];
-      for (minerals, gas) in player_collection_rate {
-        player_total_collection_rate[0] += *minerals as u64;
-        player_total_collection_rate[1] += *gas as u64;
-      }
-      let num_collection_rate = player_collection_rate.len() as u64;
-      avg_collection_rate[index] = (
-        if num_collection_rate == 0 { 0 } else { (player_total_collection_rate[0] / num_collection_rate) as u16 },
-        if num_collection_rate == 0 { 0 } else { (player_total_collection_rate[1] / num_collection_rate) as u16 },
-      );
-    }
-
-    let mut avg_unspent_resources: [(u16, u16); 2] = [(0, 0), (0, 0)];
-    for (index, player_unspent_resources) in game.unspent_resources.iter().enumerate() {
-      let mut player_total_unspent_resources: [u64; 2] = [0, 0];
-      for (minerals, gas) in player_unspent_resources {
-        player_total_unspent_resources[0] += *minerals as u64;
-        player_total_unspent_resources[1] += *gas as u64;
-      }
-      let num_unspent_resources = player_unspent_resources.len() as u64;
-      avg_unspent_resources[index] = (
-        if num_unspent_resources == 0 { 0 } else { (player_total_unspent_resources[0] / num_unspent_resources) as u16 },
-        if num_unspent_resources == 0 { 0 } else { (player_total_unspent_resources[1] / num_unspent_resources) as u16 },
-      );
-    }
-
-    let mut summary_stats = HashMap::new();
-    for player_index in 0..2 {
-      let player_summary_stats = HashMap::from([
-        ("avg_collection_rate", SummaryStat::ResourceValues(avg_collection_rate[player_index])),
-        ("resources_collected", SummaryStat::ResourceValues(resources_collected[player_index])),
-        ("resources_lost", SummaryStat::ResourceValues(resources_lost[player_index])),
-        ("avg_unspent_resources", SummaryStat::ResourceValues(avg_unspent_resources[player_index])),
-        ("workers_produced", SummaryStat::Value(game.workers_active[player_index] as u16)),
-        ("workers_lost", SummaryStat::Value(0)),
-      ]);
-      summary_stats.insert((player_index + 1) as u8, player_summary_stats);
-    }
 
     let parsed_metadata: Metadata = serde_json::from_str(&replay.metadata).unwrap();
 
@@ -219,6 +171,49 @@ impl<'a> ReplayParser<'a> {
       _other => panic!("Found DecoderResult::{:?}", _other)
     }
 
+    let mut serialized_players = vec![];
+    let mut serialized_matchup = vec![];
+    for player in &players {
+      serialized_players.push(player.name.clone());
+      serialized_matchup.push(player.race.clone());
+    }
+    serialized_players.sort();
+    serialized_matchup.sort();
+
+    let loser: u8 = if winner == 1 {
+      2
+    } else {
+      1
+    };
+
+    players.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let mut game = Game::new();
+    let mut timeline: Vec<TinybirdTimelineEntry> = vec![];
+    let context = TimelineContext {
+      content_hash: raw_replay.content_hash.clone(),
+      players: players.clone(),
+      winner_id: winner,
+      matchup: serialized_matchup.join(""),
+      map: map.to_owned(),
+      event: tags.clone(),
+      game_length,
+      played_at,
+    };
+    let mut event_parser = EventParser::new(
+      context,
+      &replay,
+      &mut game,
+      &mut timeline,
+    );
+
+    for event in &replay.tracker_events {
+      if let Err(e) = event_parser.parse(event) {
+        println!("event parsing failed: {:?}\n", e);
+        continue;
+      }
+    }
+
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
     for (replay_build_index, build) in game.builds.iter_mut().enumerate() {
@@ -256,23 +251,6 @@ impl<'a> ReplayParser<'a> {
         }
       }
     }
-
-    let mut serialized_players = vec![];
-    let mut serialized_matchup = vec![];
-    for player in &players {
-      serialized_players.push(player.name.clone());
-      serialized_matchup.push(player.race.clone());
-    }
-    serialized_players.sort();
-    serialized_matchup.sort();
-
-    let loser: u8 = if winner == 1 {
-      2
-    } else {
-      1
-    };
-
-    players.sort_by(|a, b| a.id.cmp(&b.id));
 
     const GAS_BUILDINGS: [&str; 3] = [
       "Assimilator",
@@ -325,6 +303,7 @@ impl<'a> ReplayParser<'a> {
       played_at,
       tags: tags.clone(),
       tinybird: tinybird_game,
+      timeline,
     };
 
     Ok(replay_summary)

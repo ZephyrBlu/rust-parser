@@ -68,30 +68,30 @@ pub struct TinybirdGame {
   event: String,
 }
 
-#[derive(Clone, Serialize)]
-pub struct TinybirdTimelineEntry<'a> {
-  content_hash: &'a str,
+#[derive(Default, Clone, Serialize)]
+pub struct TinybirdTimelineEntry {
+  content_hash: String,
   gameloop: u16,
   win: bool,
-  player_name: &'a str,
-  player_race: &'a str,
-  player_build: &'a str,
+  player_name: String,
+  player_race: String,
+  // player_build: String,
   player_collection_rate: u16,
   player_army_value: u16,
   player_workers_active: u16,
-  player_workers_lost: u16,
-  player_workers_killed: u16,
-  opponent_name: &'a str,
-  opponent_race: &'a str,
-  opponent_build: &'a str,
+  // player_workers_lost: u16,
+  // player_workers_killed: u16,
+  opponent_name: String,
+  opponent_race: String,
+  // opponent_build: String,
   opponent_collection_rate: u16,
   opponent_army_value: u16,
   opponent_workers_active: u16,
-  opponent_workers_lost: u16,
-  opponent_workers_killed: u16,
-  matchup: &'a str,
-  map: &'a str,
-  event: &'a str,
+  // opponent_workers_lost: u16,
+  // opponent_workers_killed: u16,
+  matchup: String,
+  map: String,
+  event: String,
   game_length: u16,
 }
 
@@ -99,7 +99,7 @@ fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/Projects/rust-parser/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -115,6 +115,7 @@ fn main() {
   };
 
   let mut tinybird_serialized: Vec<TinybirdGame> = vec![];
+  let mut tinybird_timelines: Vec<TinybirdTimelineEntry> = vec![];
 
   let replay_parser = ReplayParser::new();
 
@@ -144,6 +145,7 @@ fn main() {
     if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
       tinybird_serialized.push(replay_summary.tinybird.clone());
     }
+    tinybird_timelines.extend(replay_summary.timeline.clone());
 
     let mut races = vec![];
     let mut matchup = vec![];
@@ -242,6 +244,13 @@ fn main() {
   File::create("tinybird_sc2.csv").unwrap();
   let mut wtr = Writer::from_path("tinybird_sc2.csv").unwrap();
   for record in tinybird_serialized {
+    wtr.serialize(record).unwrap();
+  }
+  wtr.flush().unwrap();
+
+  File::create("tinybird_sc2.csv").unwrap();
+  let mut wtr = Writer::from_path("tinybird_sc2_timelines.csv").unwrap();
+  for record in &tinybird_timelines {
     wtr.serialize(record).unwrap();
   }
   wtr.flush().unwrap();
