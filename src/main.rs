@@ -142,12 +142,6 @@ fn main() {
 
   let mut tinybird_serialized: Vec<TinybirdGame> = vec![];
 
-  let mut race_index = Index::new("race");
-  let mut player_index = Index::new("player");
-  let mut metadata_index = Index::new("metadata");
-  let mut map_index = Index::new("map");
-  let mut build_index = Index::new("build");
-
   let mut replay_id = 0;
   let replay_parser = ReplayParser::new();
 
@@ -198,12 +192,6 @@ fn main() {
       for player in players {
         races.push(player.race.clone());
         matchup.push(player.race.clone());
-
-        race_index.add_id(player.race.to_lowercase().clone(), replay_id as u32);
-        race_index.add_hash(player.race.to_lowercase().clone(), content_hash.clone());
-
-        player_index.add_id(player.name.to_lowercase().clone(), replay_id as u32);
-        player_index.add_hash(player.name.to_lowercase().clone(), content_hash.clone());
       }
     }
     matchup.sort();
@@ -279,115 +267,10 @@ fn main() {
     replay_id += 1;
   }
 
-  // let distribution_time = now.elapsed();
-  // build_tokens.generate_token_distributions();
-  // println!("generated token distributions in {:.2?}", now.elapsed() - distribution_time);
-
-  // let token_path_time = now.elapsed();
-  // let mut skipped_builds = 0;
-  // for replay_summary in &result.replays {
-  //   let mut races = vec![];
-  //   let mut matchup = vec![];
-  //   if let ReplayEntry::Players(players) = replay_summary.get("players").unwrap() {
-  //     for player in players {
-  //       races.push(player.race.clone());
-  //       matchup.push(player.race.clone());
-  //     }
-  //   }
-  //   matchup.sort();
-
-  //   // if let ReplayEntry::Builds(builds) = replay_summary.get("builds").unwrap() {
-  //   //   let matchup_prefix = matchup.join(",");
-  //   //   for (p_id, player_build) in builds.iter().enumerate() {
-  //   //     if player_build.len() <= 3 {
-  //   //       // println!("Build has less than 3 buildings: {:?}", player_build);
-  //   //       skipped_builds += 1;
-  //   //       continue;
-  //   //     }
-
-  //   //     let build_prefix = format!("{}-{}", races[p_id], matchup_prefix);
-  //   //     build_tokens.generate_token_paths(&player_build, build_prefix);
-  //   //   }
-  //   // }
-  // }
-
-  // // sort by token path probabilities
-  // build_tokens.token_paths
-  //   .sort_by(|a, b|
-  //     a.1
-  //       .partial_cmp(&b.1)
-  //       .expect("path probabilities should be floats"));
-
-  // println!("generated token paths in {:.2?}", now.elapsed() - token_path_time);
-  // println!("skipped builds: {:?}", skipped_builds + build_tokens.skipped_builds.len());
-  // println!("total paths: {:?}", build_tokens.token_paths.len());
-
-  // println!("comparing builds");
-  // build_tokens.compare_builds();
-  // println!("generating build clusters");
-  // build_tokens.generate_clusters();
-
-  // let mut build_information = vec![];
-  // for (builds, information) in &build_tokens.build_comparison_information {
-  //   build_information.push((information, builds));
-  // }
-  // build_information.sort_by(|a, b|
-  //   a.0
-  //     .partial_cmp(&b.0)
-  //     .expect("path probabilities should be floats"));
-  // build_information.reverse();
-
-  // // for (information, builds) in build_information {
-  // //   println!("{:?} {:?}", information, builds);
-  // // }
-  // println!("generated {:?} comparisons", build_tokens.build_comparison_information.len());
-
   build_tokens.generate_matchup_build_trees();
   build_tokens.generate_matchup_unit_trees();
 
-  // let mut comparison_mappings: HashMap<u32, &String> = HashMap::new();
-  // for (index, (comparison_identifier, comparison_diff)) in build_tokens.build_comparison_information.iter().enumerate() {
-  //   comparison_mappings.insert(index as u32, comparison_identifier);
-  //   result.comparisons.insert(index as u32, comparison_diff);
-  // }
-
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
-
-  // ----------------------------------------------------------------------
-
-  // let indexes = vec![
-  //   &race_index,
-  //   &player_index,
-  //   &map_index,
-  //   &metadata_index,
-  // ];
-
-  // let mut queries = vec![];
-  // for index in &indexes {
-  //   for key in index.hash_entries.keys() {
-  //     queries.push(key.to_lowercase());
-  //   }
-  // }
-
-  // let mut search = Search::new();
-
-  // for query in queries {
-  //   search.search(query, &indexes);
-  // }
-
-  // let mut replay_search_results: HashMap<&String, Vec<&ReplaySummary>> = HashMap::new();
-  // for (query_key, references) in &search.results {
-  //   for id in references {
-  //     let replay = &result.replays[*id as usize];
-  //     replay_search_results
-  //       .entry(query_key)
-  //       .and_modify(|references| references.push(replay))
-  //       .or_insert(vec![replay]);
-  //   }
-  // }
-
-  // let results_output = File::create("generated/computed.json").unwrap();
-  // serde_json::to_writer(&results_output, &replay_search_results);
 
   let players_output = File::create("generated/players.json").unwrap();
   serde_json::to_writer(&players_output, &build_tokens.players);
@@ -400,9 +283,6 @@ fn main() {
   }
   let replay_output = File::create("generated/replays.json").unwrap();
   serde_json::to_writer(&replay_output, &mapped_replays);
-
-  // let build_comparisons_output = File::create("generated/../search/data/comparisons.json").unwrap();
-  // serde_json::to_writer(&build_comparisons_output, &build_tokens.build_comparison_information);
 
   let token_probability_output = File::create("generated/probability.json").unwrap();
   serde_json::to_writer(&token_probability_output, &build_tokens.probability);
@@ -434,42 +314,6 @@ fn main() {
     wtr.serialize(record).unwrap();
   }
   wtr.flush().unwrap();
-
-  // let mut filtered_build_index = Index::new();
-  // for (trigram, references) in build_index.entries {
-  //   if references.len() >= 10 {
-  //     filtered_build_index.entries.insert(trigram, references);
-  //   }
-  // }
-
-  // let indexes = HashMap::from([
-  //   ("race", race_index.hash_entries),
-  //   ("player", player_index.hash_entries),
-  //   ("metadata", metadata_index.hash_entries),
-  //   ("map", map_index.hash_entries),
-  //   // ("build", filtered_build_index),
-  // ]);
-
-  // let index_output = File::create("generated/../search/data/indexes.json").unwrap();
-  // serde_json::to_writer(&index_output, &indexes);
-
-  // let mut build_mappings: Vec<Vec<String>> = vec![];
-  // for build in replay_builds {
-  //   let split_build = build.split(",").map(|s| s.to_string()).collect();
-  //   build_mappings.push(split_build);
-  // }
-
-  // let builds_output = File::create("generated/../search/data/builds.json").unwrap();
-  // serde_json::to_writer(&builds_output, &build_mappings);
-
-  // let mut compressed_clusters: HashMap<&str, (Vec<(&str, u16)>, u16)> = HashMap::new();
-
-  // let mappings = HashMap::from([
-  //   ("clusters", ),
-  // ]);
-
-  // let mappings_output = File::create("generated/../sc2.gg/src/assets/mappings.json").unwrap();
-  // serde_json::to_writer(&mappings_output, &mappings);
 
   println!("replays serialized in {:?}", now.elapsed());
 }
