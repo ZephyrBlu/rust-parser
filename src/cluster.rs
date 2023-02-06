@@ -99,6 +99,7 @@ impl Node {
       if child.label == build_fragment {
         child.total.add(&count);
         child.value.add(&count);
+        self.total.add(&count);
 
         inserted = true;
         break;
@@ -161,48 +162,47 @@ impl Node {
     }
   }
 
-  // this needs correctness improvements. it's vaguely right but subltey wrong
-  pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
-    let mut nodes_to_remove = vec![];
-    for (idx, child) in self.children.iter_mut().enumerate() {
-      if depth == 8 || child.total.total < min_limit {
-        nodes_to_remove.push(idx);
-      } else {
-        if child.prune(min_limit, depth + 1) == -1 {
-          nodes_to_remove.push(idx);
-        }
-      }
-    }
+  // pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
+  //   let mut nodes_to_remove = vec![];
+  //   for (idx, child) in self.children.iter_mut().enumerate() {
+  //     if depth == 8 || child.total.total < min_limit {
+  //       nodes_to_remove.push(idx);
+  //     } else {
+  //       if child.prune(min_limit, depth + 1) == -1 {
+  //         nodes_to_remove.push(idx);
+  //       }
+  //     }
+  //   }
 
-    // sort and reverse to remove from back first, since removal changes position
-    nodes_to_remove.sort();
-    nodes_to_remove.reverse();
-    for idx in nodes_to_remove {
-      self.children.remove(idx);
-    }
+  //   // sort and reverse to remove from back first, since removal changes position
+  //   nodes_to_remove.sort();
+  //   nodes_to_remove.reverse();
+  //   for idx in nodes_to_remove {
+  //     self.children.remove(idx);
+  //   }
 
-    // merge if 1 child and is not a leaf node
-    if self.label != "ROOT" && self.children.len() == 1 && self.value.total == 0 {
-      let child = &self.children[0];
+  //   // merge if 1 child and is not a leaf node
+  //   if self.label != "ROOT" && self.children.len() == 1 && self.value.total == 0 {
+  //     let child = &self.children[0];
 
-      self.value = child.value.clone();
-      self.label = format!("{},{}", self.label, child.label);
+  //     self.value = child.value.clone();
+  //     self.label = format!("{},{}", self.label, child.label);
 
-      // re-parent children to current node
-      self.children = child.children.clone();
-    }
+  //     // re-parent children to current node
+  //     self.children = child.children.clone();
+  //   }
 
-    self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
-    while self.children.len() > 3 {
-      self.children.pop();
-    }
+  //   self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
+  //   while self.children.len() > 3 {
+  //     self.children.pop();
+  //   }
 
-    if self.children.len() == 0 && self.total.total < min_limit {
-      -1
-    } else {
-      1
-    }
-  }
+  //   if self.children.len() == 0 && self.total.total < min_limit {
+  //     -1
+  //   } else {
+  //     1
+  //   }
+  // }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -228,13 +228,10 @@ impl RadixTree {
   }
 
   pub fn insert(&mut self, build: &str, count: BuildCount) {
-    if build == "" {
-      return;
-    }
     self.root.walk(build, &count);
   }
 
   pub fn prune(&mut self) {
-    self.root.prune(5, 0);
+    // self.root.prune(5, 0);
   }
 }

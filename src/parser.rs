@@ -19,8 +19,8 @@ pub struct ReplaySummary {
   pub players: Vec<Player>,
   pub builds: [Vec<String>; 2],
   pub build_mappings: [u16; 2],
-  pub units: [Vec<String>; 2],
-  pub unit_mappings: [u16; 2],
+  // pub units: [Vec<String>; 2],
+  // pub unit_mappings: [u16; 2],
   pub winner: u8,
   pub game_length: u16,
   pub map: String,
@@ -72,7 +72,7 @@ impl<'a> ReplayParser<'a> {
     &'a self,
     raw_replay: Replay,
     builds: &mut Vec<String>,
-    units: &mut Vec<String>,
+    // units: &mut Vec<String>,
   ) -> Result<ReplaySummary, &'static str> {
     let replay = raw_replay.parsed;
     let tags = replay.tags.clone();
@@ -223,6 +223,10 @@ impl<'a> ReplayParser<'a> {
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
     for (replay_build_index, build) in game.builds.iter_mut().enumerate() {
+      if build.len() == 0 {
+        return Err("build is length 0");
+      }
+
       build.sort_by(|a, b| a.1.cmp(&b.1));
       replay_builds[replay_build_index] = build
         .iter()
@@ -239,24 +243,24 @@ impl<'a> ReplayParser<'a> {
       }
     }
 
-    let mut replay_units_mappings: [u16; 2] = [0, 0];
-    let mut replay_units: [Vec<String>; 2] = [vec![], vec![]];
-    for (replay_unit_index, unit) in game.units.iter_mut().enumerate() {
-      unit.sort_by(|a, b| a.1.cmp(&b.1));
-      replay_units[replay_unit_index] = unit
-        .iter()
-        .map(|(unit, _)| unit.to_owned())
-        .collect::<Vec<String>>();
+    // let mut replay_units_mappings: [u16; 2] = [0, 0];
+    // let mut replay_units: [Vec<String>; 2] = [vec![], vec![]];
+    // for (replay_unit_index, unit) in game.units.iter_mut().enumerate() {
+    //   unit.sort_by(|a, b| a.1.cmp(&b.1));
+    //   replay_units[replay_unit_index] = unit
+    //     .iter()
+    //     .map(|(unit, _)| unit.to_owned())
+    //     .collect::<Vec<String>>();
 
-      let joined_units = replay_units[replay_unit_index].join(",");
-      match units.iter().position(|seen_units| &joined_units == seen_units) {
-        Some(unit_index) => replay_units_mappings[replay_unit_index] = unit_index as u16,
-        None => {
-          units.push(joined_units);
-          replay_units_mappings[replay_unit_index] = units.len() as u16 - 1;
-        }
-      }
-    }
+    //   let joined_units = replay_units[replay_unit_index].join(",");
+    //   match units.iter().position(|seen_units| &joined_units == seen_units) {
+    //     Some(unit_index) => replay_units_mappings[replay_unit_index] = unit_index as u16,
+    //     None => {
+    //       units.push(joined_units);
+    //       replay_units_mappings[replay_unit_index] = units.len() as u16 - 1;
+    //     }
+    //   }
+    // }
 
     const GAS_BUILDINGS: [&str; 3] = [
       "Assimilator",
@@ -302,8 +306,8 @@ impl<'a> ReplayParser<'a> {
       players,
       builds: replay_builds,
       build_mappings: replay_build_mappings,
-      units: replay_units,
-      unit_mappings: replay_units_mappings,
+      // units: replay_units,
+      // unit_mappings: replay_units_mappings,
       winner,
       game_length,
       map: map.to_owned(),

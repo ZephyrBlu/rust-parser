@@ -135,11 +135,11 @@ fn main() {
     let replay_summary = match replay_parser.parse_replay(
       replay,
       &mut replay_builds,
-      &mut replay_units,
+      // &mut replay_units,
     ) {
       Ok(summary) => summary,
       Err(e) => {
-        // println!("Error parsing replay: {e}");
+        // panic!("Error parsing replay: {e}");
         continue;
       },
     };
@@ -158,69 +158,64 @@ fn main() {
     matchup.sort();
 
     let matchup_prefix = matchup.join(",");
+
     for (p_id, player_build_index) in replay_summary.build_mappings.iter().enumerate() {
       let player_build = replay_builds[*player_build_index as usize].split(",").map(|s| s.to_string()).collect();
       let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
 
-      let mut win = false;
-      win = (p_id + 1) == replay_summary.winner as usize;
+      let win = (p_id + 1) == replay_summary.winner as usize;
       build_tokens.generate_tokens(&player_build, win, token_prefix);
-
-      if player_build.len() <= 3 {
-        // println!("Build has less than 3 buildings: {:?}", player_build);
-        continue;
-      }
     }
 
-    let matchup_prefix = matchup.join(",");
-    for (p_id, player_unit_index) in replay_summary.unit_mappings.iter().enumerate() {
-      let player_units: Vec<String> = replay_units[*player_unit_index as usize].split(",").map(|s| s.to_string()).collect();
-      let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
+    // let matchup_prefix = matchup.join(",");
+    // for (p_id, player_unit_index) in replay_summary.unit_mappings.iter().enumerate() {
+    //   let player_units: Vec<String> = replay_units[*player_unit_index as usize].split(",").map(|s| s.to_string()).collect();
+    //   let token_prefix = format!("{}-{}", races[p_id], matchup_prefix);
 
-      let mut win = false;
-      win = (p_id + 1) == replay_summary.winner as usize;
+    //   let mut win = false;
+    //   win = (p_id + 1) == replay_summary.winner as usize;
 
-      build_tokens.units
-        .entry(format!(
-          "{token_prefix}__{}",
-          player_units.join(",")
-        ))
-        .and_modify(|units_count| {
-          units_count.total += 1;
-          if win {
-            units_count.wins += 1;
-          } else {
-            units_count.losses += 1;
-          }
-        })
-        .or_insert_with(|| {
-          let mut units = BuildCount {
-            total: 1,
-            wins: 0,
-            losses: 0,
-          };
+    //   build_tokens.units
+    //     .entry(format!(
+    //       "{token_prefix}__{}",
+    //       player_units.join(",")
+    //     ))
+    //     .and_modify(|units_count| {
+    //       units_count.total += 1;
+    //       if win {
+    //         units_count.wins += 1;
+    //       } else {
+    //         units_count.losses += 1;
+    //       }
+    //     })
+    //     .or_insert_with(|| {
+    //       let mut units = BuildCount {
+    //         total: 1,
+    //         wins: 0,
+    //         losses: 0,
+    //       };
   
-          if win {
-            units.wins += 1;
-          } else {
-            units.losses += 1;
-          }
+    //       if win {
+    //         units.wins += 1;
+    //       } else {
+    //         units.losses += 1;
+    //       }
   
-          units
-        });
+    //       units
+    //     });
 
-      if player_units.len() <= 3 {
-        // println!("Build has less than 3 buildings: {:?}", player_build);
-        continue;
-      }
-    }
+    //   if player_units.len() <= 3 {
+    //     // println!("Build has less than 3 buildings: {:?}", player_build);
+    //     continue;
+    //   }
+    // }
 
     result.replays.push(replay_summary);
     seen_replays.insert(content_hash);
   }
 
   build_tokens.generate_matchup_build_trees();
-  build_tokens.generate_matchup_unit_trees();
+  // build_tokens.generate_matchup_unit_trees();
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
@@ -237,8 +232,8 @@ fn main() {
   let raw_build_tree_output = File::create("generated/raw_build_tree.json").unwrap();
   serde_json::to_writer(&raw_build_tree_output, &build_tokens.raw_build_tree);
 
-  let raw_unit_tree_output = File::create("generated/raw_unit_tree.json").unwrap();
-  serde_json::to_writer(&raw_unit_tree_output, &build_tokens.raw_unit_tree);
+  // let raw_unit_tree_output = File::create("generated/raw_unit_tree.json").unwrap();
+  // serde_json::to_writer(&raw_unit_tree_output, &build_tokens.raw_unit_tree);
 
   let build_token_output = File::create("generated/tokens.json").unwrap();
   serde_json::to_writer(&build_token_output, &build_tokens.build_token_path_mappings);

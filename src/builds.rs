@@ -107,10 +107,6 @@ impl Builds {
       .map(|building| building.clone())
       .collect();
 
-    if filtered_build.len() == 0 {
-      return;
-    }
-
     self.builds
       .entry(format!(
         "{token_prefix}{SECTION_SEPARATOR}{}",
