@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
 
-use crate::cluster::{Cluster, ClusterBuild, RadixTree};
+use crate::cluster::{Cluster, ClusterBuild, RadixTrie};
 
 use serde::Serialize;
 
@@ -59,9 +59,9 @@ pub struct Builds {
   pub skipped_builds: Vec<String>,
   pub build_comparison_information: HashMap<String, f32>,
   pub build_clusters: HashMap<String, Cluster>,
-  pub build_tree: HashMap<String, RadixTree>,
-  pub raw_build_tree: HashMap<String, RadixTree>,
-  pub raw_unit_tree: HashMap<String, RadixTree>,
+  pub build_tree: HashMap<String, RadixTrie>,
+  pub raw_build_tree: HashMap<String, RadixTrie>,
+  pub raw_unit_tree: HashMap<String, RadixTrie>,
 }
 
 const MAX_TOKEN_SIZE: usize = 5;
@@ -173,7 +173,7 @@ impl Builds {
       self.raw_build_tree
         .entry(matchup.to_string())
         .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
-        .or_insert(RadixTree::from(build, build_count.clone()));
+        .or_insert(RadixTrie::from(build, build_count.clone()));
     }
   }
 
@@ -186,7 +186,7 @@ impl Builds {
       self.raw_unit_tree
         .entry(matchup.to_string())
         .and_modify(|matchup_tree| matchup_tree.insert(units, units_count.clone()))
-        .or_insert(RadixTree::from(units, units_count.clone()));
+        .or_insert(RadixTrie::from(units, units_count.clone()));
     }
   }
 
@@ -706,7 +706,7 @@ impl Builds {
               total: build_count.total,
               wins: build_count.wins,
               losses: build_count.losses,
-              tree: RadixTree::new(),
+              tree: RadixTrie::new(),
             },
         );
       }
@@ -728,7 +728,7 @@ impl Builds {
               wins: build_count.wins,
               losses: build_count.losses,
               matchup: String::new(),
-              tree: RadixTree::new(),
+              tree: RadixTrie::new(),
             },
         );
       }
@@ -920,7 +920,7 @@ impl Builds {
           // self.build_tree
           //   .entry(matchup.to_string())
           //   .and_modify(|tree| tree.insert(&root_buildings.to_string(), cluster.build.total))
-          //   .or_insert(RadixTree::from(&root_buildings.to_string(), cluster.build.total));
+          //   .or_insert(RadixTrie::from(&root_buildings.to_string(), cluster.build.total));
           matchup_clusters
             .entry(matchup)
             .and_modify(|count| *count += 1)

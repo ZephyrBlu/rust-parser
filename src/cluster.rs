@@ -25,7 +25,7 @@ pub struct Cluster {
   pub wins: u16,
   pub losses: u16,
   pub cluster: Vec<ClusterBuild>,
-  pub tree: RadixTree,
+  pub tree: RadixTrie,
 }
 
 #[derive(Serialize, Clone)]
@@ -169,13 +169,13 @@ impl Node {
 }
 
 #[derive(Serialize, Clone, Debug)]
-pub struct RadixTree {
+pub struct RadixTrie {
   pub root: Node,
 }
 
-impl RadixTree {
-  pub fn new() -> RadixTree {
-    RadixTree {
+impl RadixTrie {
+  pub fn new() -> RadixTrie {
+    RadixTrie {
       root: Node::new(
         String::from("ROOT"),
         BuildCount::new(),
@@ -184,8 +184,8 @@ impl RadixTree {
     }
   }
 
-  pub fn from(build: &str, count: BuildCount) -> RadixTree {
-    let mut tree = RadixTree::new();
+  pub fn from(build: &str, count: BuildCount) -> RadixTrie {
+    let mut tree = RadixTrie::new();
     tree.insert(build, count);
 
     tree
