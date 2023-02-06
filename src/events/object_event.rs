@@ -1,4 +1,5 @@
 use crate::game::{Game, GameObject};
+use crate::parser::TimelineContext;
 use crate::replay::Event;
 use crate::decoders::DecoderResult;
 use crate::game_state::GameState;
@@ -146,6 +147,12 @@ const TRANSITION_BUILD_TIMES: [(&str, u16); 9] = [
   ("Corruptor", 538),
 ];
 
+const WORKERS: [&str; 3] = [
+  "SCV",
+  "Probe",
+  "Drone",
+];
+
 pub struct ObjectEvent;
 
 const MAX_BUILD_LENGTH: u8 = 15;
@@ -153,7 +160,13 @@ const MAX_UNIT_BUILD_LENGTH: u8 = 30;
 const MAX_UNIT_TYPES: u8 = 10;
 
 impl ObjectEvent {
-  pub fn new(game: &mut Game, state: &mut GameState, event: &Event, event_name: &String) -> Result<(), &'static str> {
+  pub fn new(
+    context: &mut TimelineContext,
+    game: &mut Game,
+    state: &mut GameState,
+    event: &Event,
+    event_name: &String,
+  ) -> Result<(), &'static str> {
     let mut player_id: u8 = 0;
     let mut event_object_name = "";
     let mut event_object_type = "";
@@ -180,6 +193,7 @@ impl ObjectEvent {
             event_object_type = "building";
           }
         },
+        // "m_killerUnitTagIndex" => if let DecoderResult::Blob
         "m_unitTagIndex" => if let DecoderResult::Value(index) = value {
           tag_index = *index as u32;
         },
@@ -259,6 +273,21 @@ impl ObjectEvent {
       } else {
         return Ok(());
       }
+    }
+
+    if
+      event_name == "NNet.Replay.Tracker.SUnitDiedEvent" &&
+      game_object.object_type == "unit" &&
+      WORKERS.contains(&game_object.object_name.as_str())
+      // and obj killed by something, drones can die morphing
+    {
+      let opponent_index: usize = if player_index == 1 {
+        0
+      } else {
+        1
+      };
+      context.workers_lost[player_index as usize] += 1;
+      context.workers_killed[opponent_index] += 1;
     }
 
     // 9408 = ~7min, 22.4 gameloops per sec

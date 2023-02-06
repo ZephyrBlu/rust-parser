@@ -72,7 +72,7 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             // https://en.wikipedia.org/wiki/Epoch_(computing)
             played_at = (played_at / 10000000) - 11644473600;
 
-            // replays.push(replay);
+            replays.push(replay);
 
             // // 1st Jan 2023 1672531200
             // // 1st Jan 2022 1640995200
@@ -80,9 +80,9 @@ pub fn visit_dirs(replays: &mut Vec<Replay>, dir: &Path) -> Result<()> {
             // // 1st Jan 2020 1577836800
             // // 1st Jan 2019 1546300800
             // // 1st Jan 2018 1514764800
-            if played_at >= 1640995200 {
-              replays.push(replay);
-            }
+            // if played_at >= 1640995200 { // && played_at < 1546300800 {
+            //   replays.push(replay);
+            // }
           }
         },
         None => continue,

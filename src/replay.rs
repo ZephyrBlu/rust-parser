@@ -32,7 +32,7 @@ pub struct PlayerMetadata<'a> {
 #[derive(Debug, Deserialize)]
 pub struct Metadata<'a> {
   pub Title: &'a str,
-  // pub GameVersion: &'a str,
+  pub GameVersion: &'a str,
   // pub DataBuild: &'a str,
   // pub DataVersion: &'a str,
   // pub BaseBuild: &'a str,

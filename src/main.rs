@@ -66,6 +66,7 @@ pub struct TinybirdGame {
   game_length: u16,
   played_at: u64,
   event: String,
+  game_version: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize)]
@@ -74,7 +75,7 @@ pub struct TinybirdTimelineEntry {
   gameloop: u16,
   // win: bool,
   win: u8,
-  player_name: String,
+  player: String,
   player_race: String,
   // player_build: String,
   player_collection_rate: u16,
@@ -82,7 +83,7 @@ pub struct TinybirdTimelineEntry {
   player_workers_active: u16,
   // player_workers_lost: u16,
   // player_workers_killed: u16,
-  opponent_name: String,
+  opponent: String,
   opponent_race: String,
   // opponent_build: String,
   opponent_collection_rate: u16,
@@ -95,13 +96,14 @@ pub struct TinybirdTimelineEntry {
   event: String,
   game_length: u16,
   played_at: u64,
+  game_version: String,
 }
 
 fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/Projects/rust-parser/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -141,8 +143,6 @@ fn main() {
         continue;
       },
     };
-
-    // replay_summary.insert("content_hash", ReplayEntry::ContentHash(content_hash.clone()));
 
     if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
       tinybird_serialized.push(replay_summary.tinybird.clone());

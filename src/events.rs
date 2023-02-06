@@ -41,7 +41,7 @@ impl<'a> EventParser<'a> {
         "NNet.Replay.Tracker.SUnitBornEvent" |
         "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
         "NNet.Replay.Tracker.SUnitDiedEvent" => {
-          ObjectEvent::new(self.game, &mut self.state, event, name);
+          ObjectEvent::new(&mut self.context, self.game, &mut self.state, event, name);
           // Ok(())
         },
         _other => () // Ok(()),

@@ -33,12 +33,15 @@ pub struct ReplaySummary {
 pub struct TimelineContext {
   pub content_hash: String,
   pub players: Vec<Player>,
+  pub workers_lost: [u16; 2],
+  pub workers_killed: [u16; 2],
   pub winner_id: u8,
   pub map: String,
   pub event: String,
   pub matchup: String,
   pub game_length: u16,
   pub played_at: u64,
+  pub game_version: String,
 }
 
 impl<'a> ReplayParser<'a> {
@@ -193,12 +196,15 @@ impl<'a> ReplayParser<'a> {
     let context = TimelineContext {
       content_hash: raw_replay.content_hash.clone(),
       players: players.clone(),
+      workers_lost: [0, 0],
+      workers_killed: [0, 0],
       winner_id: winner,
       matchup: serialized_matchup.join(""),
       map: map.to_owned(),
       event: tags.clone(),
       game_length,
       played_at,
+      game_version: parsed_metadata.GameVersion.to_string(),
     };
     let mut event_parser = EventParser::new(
       context,
@@ -289,6 +295,7 @@ impl<'a> ReplayParser<'a> {
       game_length,
       played_at,
       event: replay.tags.clone(),
+      game_version: parsed_metadata.GameVersion.to_string(),
     };
 
     let replay_summary: ReplaySummary = ReplaySummary {
