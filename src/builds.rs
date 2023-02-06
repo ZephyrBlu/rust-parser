@@ -175,10 +175,6 @@ impl Builds {
         .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
         .or_insert(RadixTree::from(build, build_count.clone()));
     }
-
-    for (_, tree) in &mut self.raw_build_tree {
-      tree.prune();
-    }
   }
 
   pub fn generate_matchup_unit_trees(&mut self) {
@@ -191,10 +187,6 @@ impl Builds {
         .entry(matchup.to_string())
         .and_modify(|matchup_tree| matchup_tree.insert(units, units_count.clone()))
         .or_insert(RadixTree::from(units, units_count.clone()));
-    }
-
-    for (_, tree) in &mut self.raw_unit_tree {
-      tree.prune();
     }
   }
 

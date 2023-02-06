@@ -103,7 +103,7 @@ fn main() {
   let now = Instant::now();
 
   // let replay_dir = Path::new("/Users/lukeholroyd/Desktop/Projects/rust-parser/");
-  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/IEM Katowice/");
+  let replay_dir = Path::new("/Users/lukeholroyd/Desktop/replays/structured/");
   let mut replays: Vec<Replay> = vec![];
   let mut seen_replays: HashSet<String> = HashSet::new();
   visit_dirs(&mut replays, replay_dir).unwrap();
@@ -113,7 +113,7 @@ fn main() {
 
   let replay_summaries: Vec<ReplaySummary> = vec![];
   let mut replay_builds: Vec<String> = vec![];
-  let mut replay_units: Vec<String> = vec![];
+  // let mut replay_units: Vec<String> = vec![];
   let mut result = SerializedReplays {
     replays: replay_summaries,
   };

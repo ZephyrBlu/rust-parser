@@ -56,6 +56,7 @@ impl Node {
   }
 
   pub fn match_key(&self, build: &str) -> usize {
+    // don't need to split into vec to compare slices
     let key_buildings: Vec<&str> = build.split(",").collect();
     let node_buildings: Vec<&str> = self.label.split(",").collect();
 
@@ -75,6 +76,7 @@ impl Node {
   }
 
   pub fn split_at(&mut self, idx: usize) {
+    // don't need to create vec to slice here either
     let buildings: Vec<&str> = self.label.split(",").collect();
     let current_node_label = &buildings[0..idx];
     let new_node_label = &buildings[idx..];
@@ -113,6 +115,7 @@ impl Node {
       let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
 
       if match_length == node_build_length {
+        // do I need to create a vec here?
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         let next_fragment = buildings[match_length..].join(",");
 
@@ -133,6 +136,7 @@ impl Node {
       if match_length < node_build_length {
         child.split_at(match_length);
 
+        // do I need to create a vec here?
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         if buildings.len() > match_length {
           let remaining_fragment = buildings[match_length..].join(",");
@@ -150,59 +154,18 @@ impl Node {
       }
 
       if match_length > node_build_length {
-        unreachable!("match length cannot be larger than node length");
+        unreachable!("match length cannot be larger than node label");
       }
     }
 
     if !inserted {
+      // node as &str instead of String?
       let new_node = Node::new(build_fragment.to_string(), count.clone(), count.clone());
       self.children.push(new_node);
       self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
       self.total.add(&count);
     }
   }
-
-  // pub fn prune(&mut self, min_limit: u16, depth: u8) -> i16 {
-  //   let mut nodes_to_remove = vec![];
-  //   for (idx, child) in self.children.iter_mut().enumerate() {
-  //     if depth == 8 || child.total.total < min_limit {
-  //       nodes_to_remove.push(idx);
-  //     } else {
-  //       if child.prune(min_limit, depth + 1) == -1 {
-  //         nodes_to_remove.push(idx);
-  //       }
-  //     }
-  //   }
-
-  //   // sort and reverse to remove from back first, since removal changes position
-  //   nodes_to_remove.sort();
-  //   nodes_to_remove.reverse();
-  //   for idx in nodes_to_remove {
-  //     self.children.remove(idx);
-  //   }
-
-  //   // merge if 1 child and is not a leaf node
-  //   if self.label != "ROOT" && self.children.len() == 1 && self.value.total == 0 {
-  //     let child = &self.children[0];
-
-  //     self.value = child.value.clone();
-  //     self.label = format!("{},{}", self.label, child.label);
-
-  //     // re-parent children to current node
-  //     self.children = child.children.clone();
-  //   }
-
-  //   self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
-  //   while self.children.len() > 3 {
-  //     self.children.pop();
-  //   }
-
-  //   if self.children.len() == 0 && self.total.total < min_limit {
-  //     -1
-  //   } else {
-  //     1
-  //   }
-  // }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -224,14 +187,12 @@ impl RadixTree {
   pub fn from(build: &str, count: BuildCount) -> RadixTree {
     let mut tree = RadixTree::new();
     tree.insert(build, count);
+
     tree
   }
 
+  // use reference to build count instead of cloning for insert
   pub fn insert(&mut self, build: &str, count: BuildCount) {
     self.root.walk(build, &count);
-  }
-
-  pub fn prune(&mut self) {
-    // self.root.prune(5, 0);
   }
 }
