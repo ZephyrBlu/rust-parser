@@ -1,6 +1,4 @@
-use crate::builds::BuildCount;
-
-use std::cmp::{min};
+use std::cmp::min;
 use std::mem::swap;
 
 use serde::Serialize;
@@ -38,25 +36,56 @@ pub struct ClusterBuild {
 }
 
 #[derive(Serialize, Clone, Debug)]
+pub struct BuildCount {
+  pub total: u16,
+  pub wins: u16,
+  pub losses: u16,
+}
+
+impl BuildCount {
+  pub fn new() -> BuildCount {
+    BuildCount {
+      total: 0,
+      wins: 0,
+      losses: 0,
+    }
+  }
+
+  pub fn add(&mut self, other_build_count: &BuildCount) {
+    self.total += other_build_count.total;
+    self.wins += other_build_count.wins;
+    self.losses += other_build_count.losses;
+  }
+
+  pub fn reset(&mut self) {
+    self.total = 0;
+    self.wins = 0;
+    self.losses = 0;
+  }
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub struct Node {
   pub label: String,
   pub children: Vec<Node>,
   pub value: BuildCount,
-  pub total: BuildCount,
 }
 
 impl Node {
-  pub fn new(label: String, value: BuildCount, total: BuildCount) -> Node {
+  pub fn new(label: String, value: BuildCount) -> Node {
     Node {
       label,
       children: vec![],
       value,
-      total,
     }
   }
 
+  fn key_length(key: &String) -> usize {
+    let separator_matches: Vec<&str> = key.matches(",").collect();
+    separator_matches.len()
+  }
+
   pub fn match_key(&self, build: &str) -> usize {
-    // don't need to split into vec to compare slices
     let key_buildings: Vec<&str> = build.split(",").collect();
     let node_buildings: Vec<&str> = self.label.split(",").collect();
 
@@ -76,7 +105,6 @@ impl Node {
   }
 
   pub fn split_at(&mut self, idx: usize) {
-    // don't need to create vec to slice here either
     let buildings: Vec<&str> = self.label.split(",").collect();
     let current_node_label = &buildings[0..idx];
     let new_node_label = &buildings[idx..];
@@ -84,13 +112,10 @@ impl Node {
     let mut new_node = Node::new(
       new_node_label.join(","),
       self.value.clone(),
-      self.total.clone(),
     );
     swap(&mut new_node.children, &mut self.children);
 
     self.children.push(new_node);
-    self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
-
     self.label = current_node_label.join(",");
     self.value.reset();
   }
@@ -99,9 +124,8 @@ impl Node {
     let mut inserted = false;
     for child in &mut self.children {
       if child.label == build_fragment {
-        child.total.add(&count);
         child.value.add(&count);
-        self.total.add(&count);
+        self.value.add(&count);
 
         inserted = true;
         break;
@@ -112,22 +136,19 @@ impl Node {
         continue;
       }
 
-      let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
-
+      let node_build_length = Node::key_length(&child.label);
       if match_length == node_build_length {
-        // do I need to create a vec here?
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         let next_fragment = buildings[match_length..].join(",");
 
         if child.children.len() != 0 {
           child.walk(&next_fragment, count);
         } else {
-          let new_node = Node::new(next_fragment, count.clone(), count.clone());
+          let new_node = Node::new(next_fragment, count.clone());
           child.children.push(new_node);
-          child.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
-          child.total.add(&count);
+          child.value.add(&count);
         }
-        self.total.add(&count);
+        self.value.add(&count);
 
         inserted = true;
         break;
@@ -136,18 +157,16 @@ impl Node {
       if match_length < node_build_length {
         child.split_at(match_length);
 
-        // do I need to create a vec here?
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         if buildings.len() > match_length {
           let remaining_fragment = buildings[match_length..].join(",");
-          let new_node = Node::new(remaining_fragment, count.clone(), count.clone());
+          let new_node = Node::new(remaining_fragment, count.clone());
           child.children.push(new_node);
-          child.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
         } else {
           child.value = count.clone();
         }
-        child.total.add(&count);
-        self.total.add(&count);
+        child.value.add(&count);
+        self.value.add(&count);
 
         inserted = true;
         break;
@@ -159,11 +178,9 @@ impl Node {
     }
 
     if !inserted {
-      // node as &str instead of String?
-      let new_node = Node::new(build_fragment.to_string(), count.clone(), count.clone());
+      let new_node = Node::new(build_fragment.to_string(), count.clone());
       self.children.push(new_node);
-      self.children.sort_by(|a, b| b.total.total.cmp(&a.total.total));
-      self.total.add(&count);
+      self.value.add(&count);
     }
   }
 }
@@ -178,7 +195,6 @@ impl RadixTrie {
     RadixTrie {
       root: Node::new(
         String::from("ROOT"),
-        BuildCount::new(),
         BuildCount::new(),
       ),
     }

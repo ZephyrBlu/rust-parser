@@ -4,47 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
+use std::time::Instant;
 
-use crate::cluster::{Cluster, ClusterBuild, RadixTrie};
-
-use serde::Serialize;
-
-#[derive(Serialize, Clone, Debug)]
-pub struct BuildCount {
-  pub total: u16,
-  pub wins: u16,
-  pub losses: u16,
-}
-
-impl BuildCount {
-  pub fn new() -> BuildCount {
-    BuildCount {
-      total: 0,
-      wins: 0,
-      losses: 0,
-    }
-  }
-
-  pub fn from(total: u16, wins: u16, losses: u16) -> BuildCount {
-    BuildCount {
-      total,
-      wins,
-      losses,
-    }
-  }
-
-  pub fn add(&mut self, other_build_count: &BuildCount) {
-    self.total += other_build_count.total;
-    self.wins += other_build_count.wins;
-    self.losses += other_build_count.losses;
-  }
-
-  pub fn reset(&mut self) {
-    self.total = 0;
-    self.wins = 0;
-    self.losses = 0;
-  }
-}
+use crate::cluster::{Cluster, ClusterBuild, RadixTrie, BuildCount};
 
 pub struct Builds {
   pub builds: HashMap<String, BuildCount>,
@@ -165,6 +127,7 @@ impl Builds {
   }
 
   pub fn generate_matchup_build_trees(&mut self) {
+    let start = Instant::now();
     for (raw_build, build_count) in &self.builds {
       let deconstructed_build: Vec<&str> = raw_build.split(SECTION_SEPARATOR).collect();
       let matchup = deconstructed_build[0];
@@ -175,6 +138,7 @@ impl Builds {
         .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
         .or_insert(RadixTrie::from(build, build_count.clone()));
     }
+    println!("generated build tree in: {:.2?}", start.elapsed());
   }
 
   pub fn generate_matchup_unit_trees(&mut self) {

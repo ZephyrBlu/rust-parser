@@ -13,20 +13,15 @@ mod game_state;
 use crate::parser::{ReplayParser, ReplaySummary};
 use crate::replay::Replay;
 use crate::utils::visit_dirs;
-use crate::builds::{Builds, BuildCount};
+use crate::builds::Builds;
 
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs::File;
 use std::path::Path;
 use csv::Writer;
-// use bzip2_rs::ParallelDecoderReader;
-// use bzip2_rs::RayonThreadPool;
 
 use std::time::Instant;
-
-// #[global_allocator]
-// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Serialize)]
 #[serde(untagged)]
