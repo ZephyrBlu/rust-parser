@@ -116,6 +116,7 @@ impl Node {
     swap(&mut new_node.children, &mut self.children);
 
     self.children.push(new_node);
+    self.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
     self.label = current_node_label.join(",");
     self.value.reset();
   }
@@ -146,6 +147,7 @@ impl Node {
         } else {
           let new_node = Node::new(next_fragment, count.clone());
           child.children.push(new_node);
+          child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
           child.value.add(&count);
         }
         self.value.add(&count);
@@ -162,6 +164,7 @@ impl Node {
           let remaining_fragment = buildings[match_length..].join(",");
           let new_node = Node::new(remaining_fragment, count.clone());
           child.children.push(new_node);
+          child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
         } else {
           child.value = count.clone();
         }
@@ -180,6 +183,7 @@ impl Node {
     if !inserted {
       let new_node = Node::new(build_fragment.to_string(), count.clone());
       self.children.push(new_node);
+      self.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
       self.value.add(&count);
     }
   }
