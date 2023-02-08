@@ -80,22 +80,24 @@ impl Node {
     }
   }
 
-  fn key_length(key: &String) -> usize {
-    let separator_matches: Vec<&str> = key.matches(",").collect();
-    separator_matches.len() + 1
-  }
-
   pub fn match_key(&self, build: &str) -> usize {
     let key_buildings: Vec<&str> = build.split(",").collect();
     let node_buildings: Vec<&str> = self.label.split(",").collect();
 
     let mut match_length = 0;
-    for idx in 0..min(key_buildings.len(), node_buildings.len()) {
+    let upper_bound = min(key_buildings.len(), node_buildings.len());
+    for idx in 0..upper_bound {
       let current_key_building = key_buildings[idx];
       let current_node_building = node_buildings[idx];
 
       if current_key_building == current_node_building {
-        match_length += 1;
+        // account for joining commas except if last item
+        let current_match_length = if idx == upper_bound - 1 {
+          current_key_building.len()
+        } else {
+          current_key_building.len() + 1
+        };
+        match_length += current_match_length;
       } else {
         break;
       }
@@ -105,19 +107,18 @@ impl Node {
   }
 
   pub fn split_at(&mut self, idx: usize) {
-    let buildings: Vec<&str> = self.label.split(",").collect();
-    let current_node_label = &buildings[0..idx];
-    let new_node_label = &buildings[idx..];
+    let current_node_label = &self.label[..idx];
+    let new_node_label = &self.label[idx..];
 
     let mut new_node = Node::new(
-      new_node_label.join(","),
+      new_node_label.to_string(),
       self.value.clone(),
     );
     swap(&mut new_node.children, &mut self.children);
 
     self.children.push(new_node);
     self.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
-    self.label = current_node_label.join(",");
+    self.label = current_node_label.to_string();
     self.value.reset();
   }
 
@@ -132,21 +133,19 @@ impl Node {
         break;
       }
 
-      let match_length = child.match_key(&build_fragment);
-      if match_length == 0 {
-        continue;
-      }
+      let compare_fragment = if build_fragment.len() > child.label.len() {
+        &build_fragment[..child.label.len()]
+      } else {
+        build_fragment
+      };
 
-      // let node_build_length = Node::key_length(&child.label);
-      let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
-      if match_length == node_build_length {
-        let buildings: Vec<&str> = build_fragment.split(",").collect();
-        let next_fragment = buildings[match_length..].join(",");
+      if compare_fragment == child.label {
+        let next_fragment = &build_fragment[child.label.len()..];
 
         if child.children.len() != 0 {
           child.walk(&next_fragment, count);
         } else {
-          let new_node = Node::new(next_fragment, count.clone());
+          let new_node = Node::new(next_fragment.to_string(), count.clone());
           child.children.push(new_node);
           child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
           child.value.add(&count);
@@ -157,18 +156,11 @@ impl Node {
         break;
       }
 
-      if match_length < node_build_length {
+      if child.label.contains(compare_fragment) {
+        let match_length = compare_fragment.len();
         child.split_at(match_length);
 
-        let buildings: Vec<&str> = build_fragment.split(",").collect();
-        if buildings.len() > match_length {
-          let remaining_fragment = buildings[match_length..].join(",");
-          let new_node = Node::new(remaining_fragment, count.clone());
-          child.children.push(new_node);
-          child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
-        } else {
-          child.value = count.clone();
-        }
+        child.value = count.clone();
         child.value.add(&count);
         self.value.add(&count);
 
@@ -176,7 +168,28 @@ impl Node {
         break;
       }
 
-      if match_length > node_build_length {
+      // new and optimized comparisons end here
+
+      let match_length = child.match_key(&build_fragment);
+      if match_length == 0 {
+        continue;
+      }
+
+      if match_length < child.label.len() {
+        child.split_at(match_length);
+
+        let remaining_fragment = build_fragment[match_length..].to_string();
+        let new_node = Node::new(remaining_fragment, count.clone());
+        child.children.push(new_node);
+        child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
+        child.value.add(&count);
+        self.value.add(&count);
+
+        inserted = true;
+        break;
+      }
+
+      if match_length > child.label.len() {
         unreachable!("match length cannot be larger than node label");
       }
     }
