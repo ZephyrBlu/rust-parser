@@ -137,7 +137,8 @@ impl Node {
         continue;
       }
 
-      let node_build_length = Node::key_length(&child.label);
+      // let node_build_length = Node::key_length(&child.label);
+      let node_build_length = child.label.split(",").collect::<Vec<&str>>().len();
       if match_length == node_build_length {
         let buildings: Vec<&str> = build_fragment.split(",").collect();
         let next_fragment = buildings[match_length..].join(",");
