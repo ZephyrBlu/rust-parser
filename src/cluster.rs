@@ -118,7 +118,6 @@ impl Node {
     self.children.push(new_node);
     self.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
     self.label = current_node_label.join(",");
-    self.value.reset();
   }
 
   pub fn walk(&mut self, build_fragment: &str, count: &BuildCount) {
@@ -166,10 +165,8 @@ impl Node {
           let new_node = Node::new(remaining_fragment, count.clone());
           child.children.push(new_node);
           child.children.sort_by(|a, b| b.value.total.cmp(&a.value.total));
-        } else {
-          child.value = count.clone();
+          child.value.add(&count);
         }
-        child.value.add(&count);
         self.value.add(&count);
 
         inserted = true;
