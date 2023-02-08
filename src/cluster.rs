@@ -82,7 +82,7 @@ impl Node {
 
   fn key_length(key: &String) -> usize {
     let separator_matches: Vec<&str> = key.matches(",").collect();
-    separator_matches.len()
+    separator_matches.len() + 1
   }
 
   pub fn match_key(&self, build: &str) -> usize {

@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
-use std::time::Instant;
 
 use crate::cluster::{Cluster, ClusterBuild, RadixTrie, BuildCount};
 
@@ -127,7 +126,6 @@ impl Builds {
   }
 
   pub fn generate_matchup_build_trees(&mut self) {
-    let start = Instant::now();
     for (raw_build, build_count) in &self.builds {
       let deconstructed_build: Vec<&str> = raw_build.split(SECTION_SEPARATOR).collect();
       let matchup = deconstructed_build[0];
@@ -138,7 +136,6 @@ impl Builds {
         .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
         .or_insert(RadixTrie::from(build, build_count.clone()));
     }
-    println!("generated build tree in: {:.2?}", start.elapsed());
   }
 
   pub fn generate_matchup_unit_trees(&mut self) {
