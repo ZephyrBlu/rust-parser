@@ -87,11 +87,7 @@ impl Node {
 
       if current_key_building == current_node_building {
         // account for joining commas except if last item
-        let current_match_length = if idx == upper_bound - 1 {
-          current_key_building.len()
-        } else {
-          current_key_building.len() + 1
-        };
+        let current_match_length = current_key_building.len();
         match_length += current_match_length;
       } else {
         break;
@@ -103,7 +99,7 @@ impl Node {
 
   pub fn split_at(&mut self, idx: usize) {
     let current_node_label = &self.label[..idx];
-    let new_node_label = &self.label[idx..];
+    let new_node_label = &self.label[idx + 1..];
 
     let mut new_node = Node::new(
       new_node_label.to_string(),
@@ -133,7 +129,7 @@ impl Node {
       };
 
       if compare_fragment == child.label {
-        let next_fragment = &build_fragment[child.label.len()..];
+        let next_fragment = &build_fragment[child.label.len() + 1..];
 
         if child.children.len() != 0 {
           child.walk(&next_fragment, count);
@@ -148,7 +144,7 @@ impl Node {
         break;
       }
 
-      if child.label.contains(compare_fragment) {
+      if child.label.starts_with(compare_fragment) {
         let match_length = compare_fragment.len();
         child.split_at(match_length);
 
