@@ -214,7 +214,7 @@ fn main() {
 
   for (name, tree) in &build_tokens.raw_build_tree {
     let total_insertion_time: u128 = tree.insert_time.iter().sum();
-    println!("total insertion time for {:?}: {:?}microsec", name, total_insertion_time);
+    println!("total insertion time for {:?}: {:?} nanoseconds", name, total_insertion_time);
   }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);

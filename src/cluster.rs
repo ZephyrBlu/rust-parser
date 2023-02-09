@@ -76,19 +76,22 @@ impl Node {
   }
 
   pub fn match_key(&self, build: &str) -> usize {
-    let key_buildings: Vec<&str> = build.split(",").collect();
-    let node_buildings: Vec<&str> = self.label.split(",").collect();
-
     let mut match_length = 0;
-    let upper_bound = min(key_buildings.len(), node_buildings.len());
-    for idx in 0..upper_bound {
-      let current_key_building = key_buildings[idx];
-      let current_node_building = node_buildings[idx];
+    let key_chars = build.as_bytes();
+    let node_chars = self.label.as_bytes();
 
-      if current_key_building == current_node_building {
-        // account for joining commas except if last item
-        let current_match_length = current_key_building.len();
-        match_length += current_match_length;
+    let upper_bound = min(key_chars.len(), node_chars.len());
+
+    // doesn't account for full match scenario as that is covered beforehand
+    for idx in 0..upper_bound {
+      let current_key_char = key_chars[idx];
+      let current_node_char = node_chars[idx];
+
+      if current_key_char == current_node_char {
+        // 44 = comma char
+        if current_key_char == 44 {
+          match_length = idx;
+        }
       } else {
         break;
       }
@@ -111,6 +114,7 @@ impl Node {
     self.label = current_node_label.to_string();
   }
 
+  // refactor this to use matches instead of only if statements
   pub fn walk(&mut self, build_fragment: &str, count: &BuildCount) {
     let mut inserted = false;
     for child in &mut self.children {
@@ -145,8 +149,7 @@ impl Node {
       }
 
       if child.label.starts_with(compare_fragment) {
-        let match_length = compare_fragment.len();
-        child.split_at(match_length);
+        child.split_at(compare_fragment.len());
 
         child.value = count.clone();
         child.value.add(&count);
@@ -156,8 +159,6 @@ impl Node {
         break;
       }
 
-      // new and optimized comparisons end here
-
       let match_length = child.match_key(&build_fragment);
       if match_length == 0 {
         continue;
@@ -166,7 +167,7 @@ impl Node {
       if match_length < child.label.len() {
         child.split_at(match_length);
 
-        let remaining_fragment = build_fragment[match_length..].to_string();
+        let remaining_fragment = build_fragment[match_length + 1..].to_string();
         let new_node = Node::new(remaining_fragment, count.clone());
         child.children.push(new_node);
         child.value.add(&count);
@@ -177,7 +178,7 @@ impl Node {
       }
 
       if match_length > child.label.len() {
-        unreachable!("match length cannot be larger than node label");
+        unreachable!("match length cannot be larger than node label\nmatch length {:?} on:\n{:?}\n{:?}", match_length, build_fragment, child.label);
       }
     }
 
@@ -217,6 +218,6 @@ impl RadixTrie {
     let start = Instant::now();
     self.root.walk(build, &count);
     let finish = start.elapsed();
-    self.insert_time.push(finish.as_micros());
+    self.insert_time.push(finish.as_nanos());
   }
 }
