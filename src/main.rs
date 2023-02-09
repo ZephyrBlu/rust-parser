@@ -212,6 +212,11 @@ fn main() {
   build_tokens.generate_matchup_build_trees();
   // build_tokens.generate_matchup_unit_trees();
 
+  for (name, tree) in &build_tokens.raw_build_tree {
+    let total_insertion_time: u128 = tree.insert_time.iter().sum();
+    println!("total insertion time for {:?}: {:?}microsec", name, total_insertion_time);
+  }
+
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
   // let mut mapped_replays = HashMap::new();

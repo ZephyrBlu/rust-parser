@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::mem::swap;
+use std::time::{Instant, Duration};
 
 use serde::Serialize;
 
@@ -78,11 +79,6 @@ impl Node {
       children: vec![],
       value,
     }
-  }
-
-  fn key_length(key: &String) -> usize {
-    let separator_matches: Vec<&str> = key.matches(",").collect();
-    separator_matches.len() + 1
   }
 
   pub fn match_key(&self, build: &str) -> usize {
@@ -190,6 +186,7 @@ impl Node {
 #[derive(Serialize, Clone, Debug)]
 pub struct RadixTrie {
   pub root: Node,
+  pub insert_time: Vec<u128>,
 }
 
 impl RadixTrie {
@@ -199,6 +196,7 @@ impl RadixTrie {
         String::from("ROOT"),
         BuildCount::new(),
       ),
+      insert_time: vec![],
     }
   }
 
@@ -209,8 +207,10 @@ impl RadixTrie {
     tree
   }
 
-  // use reference to build count instead of cloning for insert
   pub fn insert(&mut self, build: &str, count: BuildCount) {
+    let start = Instant::now();
     self.root.walk(build, &count);
+    let finish = start.elapsed();
+    self.insert_time.push(finish.as_micros());
   }
 }
