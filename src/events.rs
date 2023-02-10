@@ -1,6 +1,6 @@
 
-mod player_stats_event;
-mod object_event;
+pub mod player_stats_event;
+pub mod object_event;
 
 use crate::TinybirdTimelineEntry;
 use crate::game_state::GameState;

@@ -117,13 +117,12 @@ fn main() {
   let mut tinybird_serialized: Vec<TinybirdGame> = vec![];
   // let mut tinybird_timelines: Vec<TinybirdTimelineEntry> = vec![];
 
-  let replay_parser = ReplayParser::new();
+  let mut replay_parser = ReplayParser::new();
 
   let mut build_tokens = Builds::new();
 
   let mut parse_time = Duration::new(0, 0);
 
-  let mut event_parser = EventParser::new();
   for replay in replays {
     let content_hash = replay.content_hash.clone();
     // don't include replays we've seen before
@@ -132,8 +131,8 @@ fn main() {
     }
 
     let start_parse = Instant::now();
+    // refactor event and replay parsers into single parser
     let replay_summary = match replay_parser.parse_replay(
-      &mut event_parser,
       replay,
       &mut replay_builds,
       // &mut replay_units,
@@ -145,7 +144,11 @@ fn main() {
       },
     };
     parse_time += start_parse.elapsed();
+    result.replays.push(replay_summary);
+    seen_replays.insert(content_hash);
+  }
 
+  for replay_summary in result.replays {
     if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
       tinybird_serialized.push(replay_summary.tinybird.clone());
     }
@@ -211,9 +214,6 @@ fn main() {
     //     continue;
     //   }
     // }
-
-    result.replays.push(replay_summary);
-    seen_replays.insert(content_hash);
   }
 
   build_tokens.generate_matchup_build_trees();

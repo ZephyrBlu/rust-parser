@@ -1,17 +1,25 @@
 use serde::Serialize;
 
 use crate::{Player, TinybirdGame, TinybirdTimelineEntry};
-use crate::replay::{Metadata, Replay};
 use crate::game::Game;
+use crate::game_state::GameState;
+use crate::replay::{Metadata, Replay, Event};
 use crate::events::EventParser;
 use crate::decoders::DecoderResult;
+use crate::events::player_stats_event::PlayerStatsEvent;
+use crate::events::object_event::ObjectEvent;
 
 use std::collections::HashMap;
 
 pub type RaceMappings<'a> = HashMap<&'a str, &'a str>;
 
 pub struct ReplayParser<'a> {
+  context: TimelineContext,
   race_mappings: RaceMappings<'a>,
+  events: Vec<Event>,
+  pub game: Game,
+  state: GameState,
+  pub timeline: Vec<TinybirdTimelineEntry>,
 }
 
 #[derive(Clone, Serialize)]
@@ -62,16 +70,73 @@ impl<'a> ReplayParser<'a> {
       ("Protosi", "Protoss"),
       ("星灵", "Protoss"),
       ("Протоссы", "Protoss"),
-    ]); 
+    ]);
+    let game = Game::new();
+    let timeline: Vec<TinybirdTimelineEntry> = vec![];
 
     ReplayParser {
       race_mappings,
+      context: Default::default(),
+      events: vec![],
+      game,
+      state: GameState::new(),
+      timeline,
     }
   }
 
+  pub fn reset(&mut self, new_context: TimelineContext, new_events: Vec<Event>) {
+    self.context = new_context;
+    self.events = new_events;
+    self.game.reset();
+    self.state.reset();
+    self.timeline.clear();
+  }
+
+  pub fn parse_events(&mut self) -> Result<(), &'static str> {
+    for event in &self.events {
+      if let DecoderResult::Name(name) = &event.entries.last().unwrap().1 {
+        match name.as_str() {
+          "NNet.Replay.Tracker.SPlayerStatsEvent" => {
+            PlayerStatsEvent::new(
+              &self.context,
+              &mut self.game,
+              &mut self.timeline,
+              event,
+            );
+          },
+          "NNet.Replay.Tracker.SUnitInitEvent" |
+          "NNet.Replay.Tracker.SUnitBornEvent" |
+          "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
+          "NNet.Replay.Tracker.SUnitDiedEvent" => {
+            ObjectEvent::new(
+              &mut self.context,
+              &mut self.game,
+              &mut self.state,
+              event,
+              name,
+            );
+          },
+          _other => (),
+        }
+  
+        // // 672 gameloops = ~30sec
+        // if self.state.gameloop % 672 == 0 {
+        //   let serialized_state = serde_json::to_string(&self.state).unwrap();
+        //   self.timeline.push(serialized_state);
+        // }
+  
+        // Ok(())
+      }
+      // else {
+      //   Err("Found event without name")
+      // }
+    }
+
+    Ok(())
+  }
+
   pub fn parse_replay(
-    &'a self,
-    event_parser: &mut EventParser,
+    &mut self,
     raw_replay: Replay,
     builds: &mut Vec<String>,
     // units: &mut Vec<String>,
@@ -208,12 +273,12 @@ impl<'a> ReplayParser<'a> {
     };
     
     // event parser owns events now
-    event_parser.reset(context, replay.tracker_events);
-    event_parser.parse();
+    self.reset(context, replay.tracker_events);
+    self.parse_events();
 
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
-    for (replay_build_index, build) in event_parser.game.builds.iter_mut().enumerate() {
+    for (replay_build_index, build) in self.game.builds.iter_mut().enumerate() {
       if build.len() == 0 {
         return Err("build is length 0");
       }
@@ -305,7 +370,7 @@ impl<'a> ReplayParser<'a> {
       played_at,
       tags: tags.clone(),
       tinybird: tinybird_game,
-      timeline: event_parser.timeline.clone(),
+      timeline: self.timeline.clone(),
     };
 
     Ok(replay_summary)
