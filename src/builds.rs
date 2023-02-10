@@ -98,32 +98,32 @@ impl Builds {
         build
       });
 
-    for i in 0..filtered_build.len() {
-      if i > 10 {
-        break;
-      }
+    // for i in 0..filtered_build.len() {
+    //   if i > 10 {
+    //     break;
+    //   }
 
-      for window_size in 1..MAX_TOKEN_SIZE + 1 {
-        let tokens = &filtered_build[i..i + window_size];
-        let mut current_token = tokens[0].clone();
-        let mut next_token = TOKEN_TERMINATOR;
+    //   for window_size in 1..MAX_TOKEN_SIZE + 1 {
+    //     let tokens = &filtered_build[i..i + window_size];
+    //     let mut current_token = tokens[0].clone();
+    //     let mut next_token = TOKEN_TERMINATOR;
 
-        if tokens.len() > 1 && tokens.len() != filtered_build.len() {
-          current_token = tokens[..tokens.len() - 1].join(BUILDING_SEPARATOR);
-          next_token = &tokens[tokens.len() - 1];
-        }
+    //     if tokens.len() > 1 && tokens.len() != filtered_build.len() {
+    //       current_token = tokens[..tokens.len() - 1].join(BUILDING_SEPARATOR);
+    //       next_token = &tokens[tokens.len() - 1];
+    //     }
 
-        let identifier_token = format!("{token_prefix}{SECTION_SEPARATOR}{current_token}{SECTION_SEPARATOR}{next_token}");
-        self.tokens
-          .entry(identifier_token)
-          .and_modify(|count| *count += 1)
-          .or_insert(1);
+    //     let identifier_token = format!("{token_prefix}{SECTION_SEPARATOR}{current_token}{SECTION_SEPARATOR}{next_token}");
+    //     self.tokens
+    //       .entry(identifier_token)
+    //       .and_modify(|count| *count += 1)
+    //       .or_insert(1);
 
-        if i + window_size >= filtered_build.len() || i + window_size >= 10 {
-          break;
-        }
-      }
-    }
+    //     if i + window_size >= filtered_build.len() || i + window_size >= 10 {
+    //       break;
+    //     }
+    //   }
+    // }
   }
 
   // this loop is 10x slower than the actual insertions, should optimize

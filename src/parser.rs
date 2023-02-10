@@ -30,6 +30,7 @@ pub struct ReplaySummary {
   pub timeline: Vec<TinybirdTimelineEntry>,
 }
 
+#[derive(Default)]
 pub struct TimelineContext {
   pub content_hash: String,
   pub players: Vec<Player>,
@@ -70,6 +71,7 @@ impl<'a> ReplayParser<'a> {
 
   pub fn parse_replay(
     &'a self,
+    event_parser: &mut EventParser,
     raw_replay: Replay,
     builds: &mut Vec<String>,
     // units: &mut Vec<String>,
@@ -191,8 +193,6 @@ impl<'a> ReplayParser<'a> {
 
     players.sort_by(|a, b| a.id.cmp(&b.id));
 
-    let mut game = Game::new();
-    let mut timeline: Vec<TinybirdTimelineEntry> = vec![];
     let context = TimelineContext {
       content_hash: raw_replay.content_hash.clone(),
       players: players.clone(),
@@ -206,11 +206,7 @@ impl<'a> ReplayParser<'a> {
       played_at,
       game_version: parsed_metadata.GameVersion.to_string(),
     };
-    let mut event_parser = EventParser::new(
-      context,
-      &mut game,
-      &mut timeline,
-    );
+    event_parser.reset(context);
 
     for event in &replay.tracker_events {
       if let Err(e) = event_parser.parse(event) {
@@ -221,7 +217,7 @@ impl<'a> ReplayParser<'a> {
 
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
-    for (replay_build_index, build) in game.builds.iter_mut().enumerate() {
+    for (replay_build_index, build) in event_parser.game.builds.iter_mut().enumerate() {
       if build.len() == 0 {
         return Err("build is length 0");
       }
@@ -313,7 +309,7 @@ impl<'a> ReplayParser<'a> {
       played_at,
       tags: tags.clone(),
       tinybird: tinybird_game,
-      timeline,
+      timeline: event_parser.timeline.clone(),
     };
 
     Ok(replay_summary)

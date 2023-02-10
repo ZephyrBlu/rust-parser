@@ -20,6 +20,12 @@ impl GameState {
     }
   }
 
+  pub fn reset(&mut self) {
+    self.gameloop = 0;
+    self.buildings.clear();
+    self.units.clear();
+  }
+
   pub fn from(gameloop: u16, buildings: ObjectCount, units: ObjectCount) -> GameState {
     GameState {
       gameloop,

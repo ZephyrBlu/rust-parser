@@ -50,4 +50,32 @@ impl Game {
       objects,
     }
   }
+
+  pub fn reset(&mut self) {
+    self.workers_active = [0, 0];
+    self.minerals_collected = [0, 0];
+    self.minerals_lost = [0, 0];
+    self.gas_collected = [0, 0];
+    self.gas_lost = [0, 0];
+
+    for vec in self.collection_rate.iter_mut() {
+      vec.clear();
+    }
+
+    for vec in self.unspent_resources.iter_mut() {
+      vec.clear();
+    }
+
+    for vec in self.builds.iter_mut() {
+      vec.clear();
+    }
+
+    self.buildings.clear();
+
+    for vec in self.units.iter_mut() {
+      vec.clear();
+    }
+
+    self.objects.clear();
+  }
 }
