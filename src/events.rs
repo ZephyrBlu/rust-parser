@@ -13,6 +13,7 @@ use object_event::ObjectEvent;
 
 pub struct EventParser {
   context: TimelineContext,
+  events: Vec<Event>,
   pub game: Game,
   state: GameState,
   pub timeline: Vec<TinybirdTimelineEntry>,
@@ -25,54 +26,61 @@ impl EventParser {
 
     EventParser {
       context: Default::default(),
+      events: vec![],
       game,
       state: GameState::new(),
       timeline,
     }
   }
 
-  pub fn reset(&mut self, new_context: TimelineContext) {
+  pub fn reset(&mut self, new_context: TimelineContext, new_events: Vec<Event>) {
     self.context = new_context;
+    self.events = new_events;
     self.game.reset();
     self.state.reset();
     self.timeline.clear();
   }
 
-  pub fn parse(&mut self, event: &Event) -> Result<(), &'static str> {
-    if let DecoderResult::Name(name) = &event.entries.last().unwrap().1 {
-      match name.as_str() {
-        "NNet.Replay.Tracker.SPlayerStatsEvent" => {
-          PlayerStatsEvent::new(
-            &self.context,
-            &mut self.game,
-            &mut self.timeline,
-            event,
-          );
-        },
-        "NNet.Replay.Tracker.SUnitInitEvent" |
-        "NNet.Replay.Tracker.SUnitBornEvent" |
-        "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
-        "NNet.Replay.Tracker.SUnitDiedEvent" => {
-          ObjectEvent::new(
-            &mut self.context,
-            &mut self.game,
-            &mut self.state,
-            event,
-            name,
-          );
-        },
-        _other => (),
+  pub fn parse(&mut self) -> Result<(), &'static str> {
+    for event in &self.events {
+      if let DecoderResult::Name(name) = &event.entries.last().unwrap().1 {
+        match name.as_str() {
+          "NNet.Replay.Tracker.SPlayerStatsEvent" => {
+            PlayerStatsEvent::new(
+              &self.context,
+              &mut self.game,
+              &mut self.timeline,
+              event,
+            );
+          },
+          "NNet.Replay.Tracker.SUnitInitEvent" |
+          "NNet.Replay.Tracker.SUnitBornEvent" |
+          "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
+          "NNet.Replay.Tracker.SUnitDiedEvent" => {
+            ObjectEvent::new(
+              &mut self.context,
+              &mut self.game,
+              &mut self.state,
+              event,
+              name,
+            );
+          },
+          _other => (),
+        }
+  
+        // // 672 gameloops = ~30sec
+        // if self.state.gameloop % 672 == 0 {
+        //   let serialized_state = serde_json::to_string(&self.state).unwrap();
+        //   self.timeline.push(serialized_state);
+        // }
+  
+        // Ok(())
       }
-
-      // // 672 gameloops = ~30sec
-      // if self.state.gameloop % 672 == 0 {
-      //   let serialized_state = serde_json::to_string(&self.state).unwrap();
-      //   self.timeline.push(serialized_state);
+      // else {
+      //   Err("Found event without name")
       // }
-
-      Ok(())
-    } else {
-      Err("Found event without name")
     }
+
+    Ok(())
   }
 }

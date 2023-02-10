@@ -206,14 +206,10 @@ impl<'a> ReplayParser<'a> {
       played_at,
       game_version: parsed_metadata.GameVersion.to_string(),
     };
-    event_parser.reset(context);
-
-    for event in &replay.tracker_events {
-      if let Err(e) = event_parser.parse(event) {
-        println!("event parsing failed: {:?}\n", e);
-        continue;
-      }
-    }
+    
+    // event parser owns events now
+    event_parser.reset(context, replay.tracker_events);
+    event_parser.parse();
 
     let mut replay_build_mappings: [u16; 2] = [0, 0];
     let mut replay_builds: [Vec<String>; 2] = [vec![], vec![]];
