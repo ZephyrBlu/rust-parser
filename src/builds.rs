@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use crate::cluster::{Cluster, ClusterBuild, RadixTrie, BuildCount};
 

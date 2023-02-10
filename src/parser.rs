@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{Player, SummaryStat, TinybirdGame, TinybirdTimelineEntry};
+use crate::{Player, TinybirdGame, TinybirdTimelineEntry};
 use crate::replay::{Metadata, Replay};
 use crate::game::Game;
 use crate::events::EventParser;
@@ -208,7 +208,6 @@ impl<'a> ReplayParser<'a> {
     };
     let mut event_parser = EventParser::new(
       context,
-      &replay,
       &mut game,
       &mut timeline,
     );

@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::mem::swap;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 
 use serde::Serialize;
 
@@ -59,6 +59,8 @@ impl BuildCount {
   }
 }
 
+// use array of 16 instead of vec, big enough for my purposes
+// can bounds check on insertion and reject new insertions if len is 16
 #[derive(Serialize, Clone, Debug)]
 pub struct Node {
   pub label: String,

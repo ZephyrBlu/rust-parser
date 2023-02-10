@@ -13,17 +13,15 @@ use object_event::ObjectEvent;
 
 pub struct EventParser<'a> {
   context: TimelineContext,
-  replay: &'a Parsed,
   game: &'a mut Game,
   state: GameState,
   timeline: &'a mut Vec<TinybirdTimelineEntry>,
 }
 
 impl<'a> EventParser<'a> {
-  pub fn new(context: TimelineContext, replay: &'a Parsed, game: &'a mut Game, timeline: &'a mut Vec<TinybirdTimelineEntry>) -> EventParser<'a> {
+  pub fn new(context: TimelineContext, game: &'a mut Game, timeline: &'a mut Vec<TinybirdTimelineEntry>) -> EventParser<'a> {
     EventParser {
       context,
-      replay,
       game,
       state: GameState::new(),
       timeline,
@@ -35,16 +33,14 @@ impl<'a> EventParser<'a> {
       match name.as_str() {
         "NNet.Replay.Tracker.SPlayerStatsEvent" => {
           PlayerStatsEvent::new(&self.context, self.game, self.timeline, event);
-          // Ok(())
         },
         "NNet.Replay.Tracker.SUnitInitEvent" |
         "NNet.Replay.Tracker.SUnitBornEvent" |
         "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
         "NNet.Replay.Tracker.SUnitDiedEvent" => {
           ObjectEvent::new(&mut self.context, self.game, &mut self.state, event, name);
-          // Ok(())
         },
-        _other => () // Ok(()),
+        _other => (),
       }
 
       // // 672 gameloops = ~30sec

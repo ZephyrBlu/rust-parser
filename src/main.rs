@@ -114,7 +114,7 @@ fn main() {
   };
 
   let mut tinybird_serialized: Vec<TinybirdGame> = vec![];
-  let mut tinybird_timelines: Vec<TinybirdTimelineEntry> = vec![];
+  // let mut tinybird_timelines: Vec<TinybirdTimelineEntry> = vec![];
 
   let replay_parser = ReplayParser::new();
 
@@ -142,7 +142,7 @@ fn main() {
     if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
       tinybird_serialized.push(replay_summary.tinybird.clone());
     }
-    tinybird_timelines.extend(replay_summary.timeline.clone());
+    // tinybird_timelines.extend(replay_summary.timeline.clone());
 
     let mut races = vec![];
     let mut matchup = vec![];
@@ -245,12 +245,12 @@ fn main() {
   }
   wtr.flush().unwrap();
 
-  File::create("tinybird_sc2_timelines.csv").unwrap();
-  let mut wtr = Writer::from_path("tinybird_sc2_timelines.csv").unwrap();
-  for record in &tinybird_timelines {
-    wtr.serialize(record).unwrap();
-  }
-  wtr.flush().unwrap();
+  // File::create("tinybird_sc2_timelines.csv").unwrap();
+  // let mut wtr = Writer::from_path("tinybird_sc2_timelines.csv").unwrap();
+  // for record in &tinybird_timelines {
+  //   wtr.serialize(record).unwrap();
+  // }
+  // wtr.flush().unwrap();
 
   println!("replays serialized in {:?}", now.elapsed());
 }
