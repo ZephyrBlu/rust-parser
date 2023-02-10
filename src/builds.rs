@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
+use std::time::Instant;
 
 use crate::cluster::{Cluster, ClusterBuild, RadixTrie, BuildCount};
 
@@ -125,17 +126,30 @@ impl Builds {
     }
   }
 
+  // this loop is 10x slower than the actual insertions, should optimize
   pub fn generate_matchup_build_trees(&mut self) {
+    let mut char_count = 0;
+    let mut builds_to_insert: Vec<(String, &str, BuildCount)> = vec![];
     for (raw_build, build_count) in &self.builds {
       let deconstructed_build: Vec<&str> = raw_build.split(SECTION_SEPARATOR).collect();
       let matchup = deconstructed_build[0];
       let build = deconstructed_build[1];
 
+      char_count += build.len();
+      builds_to_insert.push((matchup.to_string(), build, build_count.clone()));
+    }
+
+    let start = Instant::now();
+    for (matchup, build, build_count) in builds_to_insert {
       self.raw_build_tree
-        .entry(matchup.to_string())
+        .entry(matchup)
         .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
         .or_insert(RadixTrie::from(build, build_count.clone()));
     }
+
+    let finish = start.elapsed();
+    println!("total time spend generating matchup build trees: {:.2?}", finish);
+    println!("inserted {:?} chars", char_count);
   }
 
   pub fn generate_matchup_unit_trees(&mut self) {
