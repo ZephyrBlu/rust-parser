@@ -2,9 +2,10 @@ use crate::game::{Game, GameObject};
 use crate::parser::TimelineContext;
 use crate::replay::Event;
 use crate::decoders::DecoderResult;
-use crate::game_state::GameState;
 
 use std::collections::hash_map::Entry;
+use std::collections::HashSet;
+use std::time::Instant;
 
 const UNITS: [&str; 47] = [
   // Protoss
@@ -155,26 +156,32 @@ const WORKERS: [&str; 3] = [
 
 pub struct ObjectEvent;
 
+#[derive(Debug, PartialEq)]
+pub enum ObjectType {
+  Building,
+  Unit,
+}
+
 const MAX_BUILD_LENGTH: u8 = 15;
 const MAX_UNIT_BUILD_LENGTH: u8 = 30;
 const MAX_UNIT_TYPES: u8 = 10;
 
 impl ObjectEvent {
   pub fn new(
+    names: &mut Vec<String>,
     context: &mut TimelineContext,
     game: &mut Game,
-    state: &mut GameState,
     event: &Event,
     event_name: &String,
   ) -> Result<(), &'static str> {
+    let now = Instant::now();
     let mut player_id: u8 = 0;
     let mut event_object_name = "";
-    let mut event_object_type = "";
+    let mut event_object_type = ObjectType::Building;
     let mut tag_index = 0;
     let mut tag_recycle = 0;
     let mut current_gameloop = 0;
 
-    // println!("event entry values {:?}", event.entries);
     for (field, value) in &event.entries {
       match field.as_str() {
         "m_controlPlayerId" => player_id = if let DecoderResult::Value(v) = value {
@@ -183,15 +190,15 @@ impl ObjectEvent {
           return Err("Player ID is not a value");
         },
         "m_unitTypeName" => if let DecoderResult::Blob(name) = value {
-          if UNITS.contains(&name.as_str()) {
-            event_object_name = name;
-            event_object_type = "unit"
-          }
-
           if BUILDINGS.contains(&name.as_str()) {
             event_object_name = name;
-            event_object_type = "building";
+            // event_object_type = "building";
           }
+
+          // if UNITS.contains(&name.as_str()) {
+          //   event_object_name = name;
+          //   event_object_type = "unit";
+          // }
         },
         // "m_killerUnitTagIndex" => if let DecoderResult::Blob
         "m_unitTagIndex" => if let DecoderResult::Value(index) = value {
@@ -208,8 +215,12 @@ impl ObjectEvent {
     }
 
     if event_name == "NNet.Replay.Tracker.SUnitDiedEvent" {
-      if let Entry::Occupied(game_object) = game.objects.entry(tag_index) {
-        game_object.remove_entry();
+      match game.objects.binary_search_by(|obj| obj.tag_index.cmp(&tag_index)) {
+        Ok(idx) => {
+          game.objects.remove(idx);
+          ()
+        },
+        Err(_) => (),
       }
     }
 
@@ -217,54 +228,70 @@ impl ObjectEvent {
       return Err("Object name not found");
     }
 
-    let tag = (tag_index << 18) + tag_recycle;
-    let player_index = match game.buildings.get(&tag) {
-      Some(building_player_id) => {
-        building_player_id - 1
-      },
-      None => {
-        game.buildings.insert(tag, player_id);
-        player_id - 1
+    // if !game.objects.contains_key(&tag_index) {
+    // if let None = game.objects.iter().find(|obj| obj.tag_index == tag_index) {
+    let mut game_object = match game.objects.binary_search_by(|obj| obj.tag_index.cmp(&tag_index)) {
+      Ok(idx) => &mut game.objects[idx],
+      Err(idx) => {
+        let tag_id = (tag_index << 18) + tag_recycle;
+
+        let mut object_name_idx: i16 = -1;
+        for (idx, name) in names.iter().enumerate() {
+          if *name == event_object_name {
+            object_name_idx = idx as i16;
+            break;
+          }
+        }
+
+        if object_name_idx == -1 {
+          names.push(event_object_name.to_string());
+          object_name_idx = names.len() as i16 - 1;
+        }
+
+        let new_object = GameObject {
+          object_name_idx: object_name_idx as usize,
+          object_type: event_object_type,
+          tag_id,
+          tag_index,
+          tag_recycle,
+          player_id,
+        };
+
+        game.objects.insert(idx, new_object);
+        &mut game.objects[idx]
       },
     };
+
+    let player_index = game_object.player_id - 1;
+    let mut game_object_name = &names[game_object.object_name_idx];
 
     if player_index > 1 {
       return Err("More than 2 players in replay");
     }
 
-    // if game.builds[player_index as usize].len() < 10 && current_gameloop > 0 {
-    //   game.builds[player_index as usize].push(building_name);
-    // }
-
-    state.gameloop = current_gameloop;
-    let event_object_type_state = if event_object_type == "building" {
-      &mut state.buildings
-    } else {
-      &mut state.units
-    };
-    event_object_type_state
-      .entry(event_object_name.to_string())
-      .and_modify(|count| *count += 1)
-      .or_insert(1);
-
-    let game_object = game.objects
-      .entry(tag_index)
-      .or_insert(GameObject {
-        object_name: event_object_name.to_string(),
-        object_type: event_object_type.to_string(),
-        tag_index,
-        tag_recycle,
-      });
-    let transition = (game_object.object_name.as_str(), event_object_name);
+    let transition = (game_object_name.as_str(), event_object_name);
     let mut calculated_gameloop = current_gameloop;
 
     if event_name == "NNet.Replay.Tracker.SUnitTypeChangeEvent" {
       if ALLOWED_TRANSITIONS.contains(&transition) {
-        game_object.object_name = event_object_name.to_string();
+        let mut new_object_name_idx: i16 = -1;
+        for (idx, name) in names.iter().enumerate() {
+          if *name == event_object_name {
+            new_object_name_idx = idx as i16;
+            break;
+          }
+        }
+
+        if new_object_name_idx == -1 {
+          names.push(event_object_name.to_string());
+          new_object_name_idx = names.len() as i16 - 1;
+        }
+        game_object.object_name_idx = new_object_name_idx as usize;
+        game_object_name = &names[game_object.object_name_idx];
 
         let transition_object= TRANSITION_BUILD_TIMES
           .iter()
-          .find(|(name, _)| *name == event_object_name);
+          .find(|(name, _)| *name == game_object_name);
 
         calculated_gameloop = match transition_object {
           Some((_, transition_gameloops)) => current_gameloop - transition_gameloops,
@@ -277,8 +304,8 @@ impl ObjectEvent {
 
     if
       event_name == "NNet.Replay.Tracker.SUnitDiedEvent" &&
-      game_object.object_type == "unit" &&
-      WORKERS.contains(&game_object.object_name.as_str())
+      game_object.object_type == ObjectType::Unit &&
+      WORKERS.contains(&game_object_name.as_str())
       // and obj killed by something, drones can die morphing
     {
       let opponent_index: usize = if player_index == 1 {
@@ -295,18 +322,19 @@ impl ObjectEvent {
       calculated_gameloop > 0 &&
       calculated_gameloop < 9408
     {
-      if game_object.object_type == "building" &&
-        !(game_object.object_name.contains("Reactor") || game_object.object_name.contains("TechLab")) &&
+      // I think the partial eq here is super inefficient
+      if game_object.object_type == ObjectType::Building &&
+        !(game_object_name.contains("Reactor") || game_object_name.contains("TechLab")) &&
         game.builds[player_index as usize].len() < MAX_BUILD_LENGTH as usize
       {
-        game.builds[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
+        game.builds[player_index as usize].push((game_object_name.to_owned(), calculated_gameloop));
       }
 
-      if game_object.object_type == "unit" &&
-        game.units[player_index as usize].len() < MAX_UNIT_BUILD_LENGTH as usize
-      {
-        game.units[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
-      }
+      // if game_object.object_type == "unit" &&
+      //   game.units[player_index as usize].len() < MAX_UNIT_BUILD_LENGTH as usize
+      // {
+      //   game.units[player_index as usize].push((game_object.object_name.to_string(), calculated_gameloop));
+      // }
     }
 
     Ok(())

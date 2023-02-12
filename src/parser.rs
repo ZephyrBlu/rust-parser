@@ -2,23 +2,22 @@ use serde::Serialize;
 
 use crate::{Player, TinybirdGame, TinybirdTimelineEntry};
 use crate::game::Game;
-use crate::game_state::GameState;
 use crate::replay::{Metadata, Replay, Event};
-use crate::events::EventParser;
 use crate::decoders::DecoderResult;
 use crate::events::player_stats_event::PlayerStatsEvent;
 use crate::events::object_event::ObjectEvent;
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 pub type RaceMappings<'a> = HashMap<&'a str, &'a str>;
 
 pub struct ReplayParser<'a> {
+  names: Vec<String>,
   context: TimelineContext,
   race_mappings: RaceMappings<'a>,
   events: Vec<Event>,
   pub game: Game,
-  state: GameState,
   pub timeline: Vec<TinybirdTimelineEntry>,
 }
 
@@ -75,11 +74,11 @@ impl<'a> ReplayParser<'a> {
     let timeline: Vec<TinybirdTimelineEntry> = vec![];
 
     ReplayParser {
+      names: vec![],
       race_mappings,
       context: Default::default(),
       events: vec![],
       game,
-      state: GameState::new(),
       timeline,
     }
   }
@@ -88,7 +87,6 @@ impl<'a> ReplayParser<'a> {
     self.context = new_context;
     self.events = new_events;
     self.game.reset();
-    self.state.reset();
     self.timeline.clear();
   }
 
@@ -109,9 +107,9 @@ impl<'a> ReplayParser<'a> {
           "NNet.Replay.Tracker.SUnitTypeChangeEvent" |
           "NNet.Replay.Tracker.SUnitDiedEvent" => {
             ObjectEvent::new(
+              &mut self.names,
               &mut self.context,
               &mut self.game,
-              &mut self.state,
               event,
               name,
             );

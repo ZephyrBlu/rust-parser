@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use crate::events::object_event::ObjectType;
 
 #[derive(Debug)]
 pub struct GameObject {
-  pub object_name: String,
-  pub object_type: String,
+  pub object_name_idx: usize,
+  pub object_type: ObjectType,
+  pub tag_id: u32,
   pub tag_index: u32,
   pub tag_recycle: u32,
+  pub player_id: u8,
 }
 
 pub struct Game {
@@ -17,9 +19,7 @@ pub struct Game {
   pub collection_rate: Vec<Vec<(u16, u16)>>,
   pub unspent_resources: Vec<Vec<(u16, u16)>>,
   pub builds: Vec<Vec<(String, u16)>>,
-  pub buildings: HashMap<u32, u8>,
-  pub units: Vec<Vec<(String, u16)>>,
-  pub objects: HashMap<u32, GameObject>,
+  pub objects: Vec<GameObject>,
 }
 
 impl Game {
@@ -32,9 +32,7 @@ impl Game {
     let collection_rate: Vec<Vec<(u16, u16)>> = vec![vec![], vec![]];
     let unspent_resources: Vec<Vec<(u16, u16)>> = vec![vec![], vec![]];
     let builds: Vec<Vec<(String, u16)>> = vec![vec![], vec![]];
-    let buildings: HashMap<u32, u8> = HashMap::new();
-    let units: Vec<Vec<(String, u16)>> = vec![vec![], vec![]];
-    let objects: HashMap<u32, GameObject> = HashMap::new();
+    let objects = vec![];
 
     Game {
       workers_active,
@@ -45,8 +43,6 @@ impl Game {
       collection_rate,
       unspent_resources,
       builds,
-      buildings,
-      units,
       objects,
     }
   }
@@ -67,12 +63,6 @@ impl Game {
     }
 
     for vec in self.builds.iter_mut() {
-      vec.clear();
-    }
-
-    self.buildings.clear();
-
-    for vec in self.units.iter_mut() {
       vec.clear();
     }
 
