@@ -3,13 +3,13 @@ use crate::protocol::ProtocolTypeInfo;
 use crate::protocol::Struct;
 
 use std::cmp::min;
-use std::collections::HashMap;
 use std::str;
 
 use serde::Serialize;
 
 pub struct BitPackedBuffer {
   data: Vec<u8>,
+  data_len: usize,
   used: usize,
   next: u8,
   nextbits: usize,
@@ -28,8 +28,10 @@ pub struct VersionedDecoder<'a> {
 
 impl BitPackedBuffer {
   fn new(contents: Vec<u8>) -> BitPackedBuffer {
+    let data_len = contents.len();
     BitPackedBuffer {
       data: contents,
+      data_len,
       used: 0,
       next: 0,
       nextbits: 0,
@@ -37,9 +39,9 @@ impl BitPackedBuffer {
     }
   }
 
-  fn done(&self) -> bool {
-    self.used >= self.data.len()
-  }
+  // fn done(&self) -> bool {
+  //   self.used >= self.data_len
+  // }
 
   fn used_bits(&self) -> usize {
     (self.used * 8) - self.nextbits
@@ -68,7 +70,7 @@ impl BitPackedBuffer {
 
     while resultbits != bits {
       if self.nextbits == 0 {
-        if self.done() {
+        if self.used >= self.data_len {
           panic!("TruncatedError");
         }
 
@@ -77,7 +79,12 @@ impl BitPackedBuffer {
         self.nextbits = 8;
       }
 
-      let copybits: u8 = min((bits - resultbits) as usize, self.nextbits) as u8;
+      // let copybits: u8 = min((bits - resultbits) as usize, self.nextbits) as u8;
+      let copybits: u8 = if (bits - resultbits) < self.nextbits as u8 {
+        bits - resultbits
+      } else {
+        self.nextbits as u8
+      };
       let shifted_copybits: u8 = ((1 << copybits) - 1) as u8;
       let copy: u128 = (self.next & shifted_copybits) as u128;
 
@@ -154,7 +161,8 @@ pub trait Decoder {
   }
 
   fn done(buffer: &BitPackedBuffer) -> bool {
-    buffer.done()
+    // buffer.done()
+    buffer.used >= buffer.data_len
   }
 
   fn used_bits(buffer: &BitPackedBuffer) -> usize {
@@ -178,7 +186,7 @@ pub trait Decoder {
   fn _choice(
     &mut self,
     bounds: &Int,
-    fields: &HashMap<i64, (&str, u8)>,
+    fields: &Vec<(i64, (&str, u8))>,
   ) -> DecoderResult;
 
   fn _struct<'a>(&'a mut self, fields: &[Struct]) -> DecoderResult;
@@ -269,23 +277,24 @@ impl Decoder for BitPackedDecoder<'_> {
   fn _choice(
     &mut self,
     bounds: &Int,
-    fields: &HashMap<i64, (&str, u8)>,
+    fields: &Vec<(i64, (&str, u8))>
   ) -> DecoderResult {
     let tag = match self._int(bounds) {
       DecoderResult::Value(value) => value,
       _other => panic!("_int didn't return DecoderResult::Value {:?}", _other),
     };
 
-    if !fields.contains_key(&tag) {
-      panic!("CorruptedError");
+    match fields.iter().find(|(field_tag, _)| *field_tag == tag) {
+      Some((_, field)) => {
+        let choice_res = match self.instance(self.typeinfos, &field.1) {
+          DecoderResult::Value(value) => value,
+          _other => panic!("didn't find DecoderResult::Value"),
+        };
+        // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
+        DecoderResult::Gameloop((field.0.to_owned(), choice_res))
+      },
+      None => panic!("CorruptedError"),
     }
-    let field = &fields[&tag];
-    let choice_res = match self.instance(self.typeinfos, &field.1) {
-      DecoderResult::Value(value) => value,
-      _other => panic!("didn't find DecoderResult::Value"),
-    };
-    // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-    DecoderResult::Gameloop((field.0.to_owned(), choice_res))
   }
 
   fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {
@@ -474,21 +483,26 @@ impl Decoder for VersionedDecoder<'_> {
   fn _choice(
     &mut self,
     bounds: &Int,
-    fields: &HashMap<i64, (&str, u8)>,
+    // fields: &HashMap<i64, (&str, u8)>,
+    fields: &Vec<(i64, (&str, u8))>,
   ) -> DecoderResult {
     self.expect_skip(3);
     let tag = self._vint();
-    if !fields.contains_key(&tag) {
-      self._skip_instance();
-      return DecoderResult::Pair((0, 0));
+
+    match fields.iter().find(|(field_tag, _)| *field_tag == tag) {
+      Some((_, field)) => {
+        let choice_res = match self.instance(self.typeinfos, &field.1) {
+          DecoderResult::Value(value) => value,
+          _other => panic!("didn't find DecoderResult::Value"),
+        };
+        // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
+        DecoderResult::Gameloop((field.0.to_owned(), choice_res))
+      },
+      None => {
+        self._skip_instance();
+        DecoderResult::Pair((0, 0))
+      },
     }
-    let field = &fields[&tag];
-    let choice_res = match self.instance(self.typeinfos, &field.1) {
-      DecoderResult::Value(value) => value,
-      _other => panic!("didn't find DecoderResult::Value"),
-    };
-    // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-    DecoderResult::Gameloop((field.0.to_owned(), choice_res))
   }
 
   fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {
