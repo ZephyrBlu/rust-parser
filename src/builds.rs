@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::str;
 use std::time::{Instant, Duration};
+// use radix_trie::Trie;
 
 use crate::cluster::{Cluster, ClusterBuild, RadixTrie, BuildCount};
 
@@ -23,6 +24,7 @@ pub struct Builds {
   pub build_clusters: HashMap<String, Cluster>,
   pub build_tree: HashMap<String, RadixTrie>,
   pub raw_build_tree: HashMap<String, RadixTrie>,
+  // pub raw_build_tree: HashMap<String, Trie<String, BuildCount>>,
   pub raw_unit_tree: HashMap<String, RadixTrie>,
 }
 
@@ -140,15 +142,37 @@ impl Builds {
     }
 
     let start = Instant::now();
+    let mut insert_duration = Duration::new(0, 0);
     for (matchup, build, build_count) in builds_to_insert {
       self.raw_build_tree
         .entry(matchup)
-        .and_modify(|matchup_tree| matchup_tree.insert(build, build_count.clone()))
+        .and_modify(|matchup_tree| {
+          let before_insert = Instant::now();
+          matchup_tree.insert(build, build_count.clone());
+          insert_duration += before_insert.elapsed();
+        })
         .or_insert(RadixTrie::from(build, build_count.clone()));
     }
 
+    // for (matchup, build, build_count) in builds_to_insert {
+    //   self.raw_build_tree
+    //     .entry(matchup)
+    //     .and_modify(|matchup_tree| {
+    //       let before_insert = Instant::now();
+    //       matchup_tree.insert(build.to_string(), build_count.clone());
+    //       insert_duration += before_insert.elapsed();
+    //       ()
+    //     })
+    //     .or_insert_with(|| {
+    //       let mut build_tree = Trie::new();
+    //       build_tree.insert(build.to_string(), build_count.clone());
+    //       build_tree
+    //     });
+    // }
+
     let finish = start.elapsed();
     println!("total time spend generating matchup build trees: {:.2?}", finish);
+    println!("time spent only on insertions: {:.2?}", insert_duration);
     println!("inserted {:?} chars", char_count);
   }
 
