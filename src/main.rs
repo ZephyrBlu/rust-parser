@@ -8,9 +8,7 @@ mod game;
 mod parser;
 mod builds;
 mod cluster;
-mod game_state;
 
-use crate::events::EventParser;
 use crate::parser::{ReplayParser, ReplaySummary};
 use crate::replay::Replay;
 use crate::utils::visit_dirs;
@@ -22,7 +20,7 @@ use std::fs::File;
 use std::path::Path;
 use csv::Writer;
 
-use std::time::{Instant, Duration};
+use std::time::Instant;
 
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -121,8 +119,6 @@ fn main() {
 
   let mut build_tokens = Builds::new();
 
-  let mut parse_time = Duration::new(0, 0);
-
   for replay in replays {
     let content_hash = replay.content_hash.clone();
     // don't include replays we've seen before
@@ -130,7 +126,6 @@ fn main() {
       continue;
     }
 
-    let start_parse = Instant::now();
     // refactor event and replay parsers into single parser
     let replay_summary = match replay_parser.parse_replay(
       replay,
@@ -143,15 +138,14 @@ fn main() {
         continue;
       },
     };
-    parse_time += start_parse.elapsed();
     result.replays.push(replay_summary);
     seen_replays.insert(content_hash);
   }
 
   for replay_summary in result.replays {
-    if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
-      tinybird_serialized.push(replay_summary.tinybird.clone());
-    }
+    // if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
+    //   tinybird_serialized.push(replay_summary.tinybird.clone());
+    // }
     // tinybird_timelines.extend(replay_summary.timeline.clone());
 
     let mut races = vec![];
@@ -219,13 +213,12 @@ fn main() {
   build_tokens.generate_matchup_build_trees();
   // build_tokens.generate_matchup_unit_trees();
 
-  for (name, tree) in &build_tokens.raw_build_tree {
-    let total_insertion_time: u128 = tree.insert_time.iter().sum();
-    println!("total insertion time for {:?}: {:?} nanoseconds", name, total_insertion_time);
-  }
+  // for (name, tree) in &build_tokens.raw_build_tree {
+  //   let total_insertion_time: u128 = tree.insert_time.iter().sum();
+  //   println!("total insertion time for {:?}: {:?} nanoseconds", name, total_insertion_time);
+  // }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
-  println!("spent {:?} in parse_replay function", parse_time.as_secs());
 
   // let mut mapped_replays = HashMap::new();
   // for replay in &result.replays {

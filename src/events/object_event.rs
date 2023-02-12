@@ -5,7 +5,6 @@ use crate::decoders::DecoderResult;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
-use std::time::Instant;
 
 const UNITS: [&str; 47] = [
   // Protoss
@@ -174,7 +173,6 @@ impl ObjectEvent {
     event: &Event,
     event_name: &String,
   ) -> Result<(), &'static str> {
-    let now = Instant::now();
     let mut player_id: u8 = 0;
     let mut event_object_name = "";
     let mut event_object_type = ObjectType::Building;

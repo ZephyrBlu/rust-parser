@@ -11,12 +11,11 @@ csv = "1.1.6"
 sha256 = "1.0.3"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
-# bzip2 = "0.4.3"
 # bzip2-rs = { version = "0.1.2", features = ["rustc_1_51"] }
 bzip2-rs = { git = "https://github.com/paolobarbolini/bzip2-rs", features = ["rustc_1_55"] }
-# mimalloc = { version = "0.1.17", default-features = false }
 
 [profile.release]
+debug = true
 lto = "fat"
 codegen-units = 1
 opt-level = 3
