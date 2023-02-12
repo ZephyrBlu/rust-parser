@@ -438,7 +438,7 @@ pub struct Struct<'a>(pub &'a str, pub u8, pub i8);
 pub enum ProtocolTypeInfo<'a> {
   Int(Int),
   Blob(Int),
-  Choice(Int, HashMap<i64, (&'a str, u8)>),
+  Choice(Int, Vec<(i64, (&'a str, u8))>),
   Struct(Vec<Struct<'a>>),
   Bool,
   Optional(u8),
@@ -494,7 +494,7 @@ fn handle_choice(input: &str) -> ProtocolTypeInfo {
     .unwrap();
   let int = handle_int(raw_choice.0);
 
-  let mut choices = HashMap::<i64, (&str, u8)>::new();
+  let mut choices = vec![];
   let raw_choices = raw_choice
     .1
     .trim_matches(|c: char| c == '{' || c == '}')
@@ -504,7 +504,7 @@ fn handle_choice(input: &str) -> ProtocolTypeInfo {
     let mut kv_pair = choice.split(':');
     let key = kv_pair.next().unwrap().parse::<i64>().unwrap();
     let value = kv_pair.next().unwrap();
-    choices.insert(key, parse_choice(value));
+    choices.push((key, parse_choice(value)));
   }
 
   ProtocolTypeInfo::Choice(int, choices)
