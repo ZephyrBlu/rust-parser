@@ -564,6 +564,14 @@ fn parse_typeinfos<'a>() -> Vec<ProtocolTypeInfo<'a>> {
   typeinfos
 }
 
+const ALLOWED_EVENTS: [&str; 5] = [
+  "NNet.Replay.Tracker.SPlayerStatsEvent",
+  "NNet.Replay.Tracker.SUnitInitEvent",
+  "NNet.Replay.Tracker.SUnitBornEvent",
+  "NNet.Replay.Tracker.SUnitTypeChangeEvent",
+  "NNet.Replay.Tracker.SUnitDiedEvent",
+];
+
 pub struct Protocol<'a> {
   typeinfos: Vec<ProtocolTypeInfo<'a>>,
   game_event_types: HashMap<i64, (u8, &'a str)>,
@@ -587,7 +595,7 @@ impl<'a> Protocol<'a> {
 
   pub fn decode_replay_details(&self, contents: Vec<u8>) -> Vec<EventEntry> {
     let mut decoder = VersionedDecoder::new(contents, &self.typeinfos);
-    let details = decoder.instance(&self.typeinfos, &GAME_DETAILS_TYPEID);
+    let details = decoder.instance(&self.typeinfos, &GAME_DETAILS_TYPEID, true);
 
     match details {
       DecoderResult::Struct(values) => values,
@@ -603,14 +611,14 @@ impl<'a> Protocol<'a> {
     while !VersionedDecoder::done(&decoder.buffer) {
       let start_bits = VersionedDecoder::used_bits(&decoder.buffer);
 
-      let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
+      let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID, true);
       if let DecoderResult::Gameloop((_, v)) = delta {
         gameloop += v;
       } else {
         panic!("found something else {:?}", delta);
       }
 
-      let event_id = match decoder.instance(&self.typeinfos, &TRACKER_EVENTID_TYPEID) {
+      let event_id = match decoder.instance(&self.typeinfos, &TRACKER_EVENTID_TYPEID, true) {
         DecoderResult::Value(value) => value,
         _other => panic!("event_id is not a value: {:?}", _other),
       };
@@ -620,15 +628,19 @@ impl<'a> Protocol<'a> {
         None => panic!("CorruptedError: event_id({:?})", event_id),
       };
 
-      let event = match decoder.instance(&self.typeinfos, type_id) {
-        DecoderResult::Struct(mut entries) => {
-          entries.push(("_gameloop".to_string(), DecoderResult::Value(gameloop)));
-          entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
-          Event::new(entries)
-        }
-        _other => panic!("Only supports Structs"),
-      };
-      events.push(event);
+      let is_event_allowed = ALLOWED_EVENTS.contains(typename);
+      let decoded_event = decoder.instance(&self.typeinfos, type_id, is_event_allowed);
+      if is_event_allowed {
+        let event = match decoded_event {
+          DecoderResult::Struct(mut entries) => {
+            entries.push(("_gameloop".to_string(), DecoderResult::Value(gameloop)));
+            entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
+            Event::new(entries)
+          }
+          _other => panic!("Only supports Structs"),
+        };
+        events.push(event);
+      }
 
       VersionedDecoder::byte_align(&mut decoder.buffer);
     }
@@ -644,11 +656,11 @@ impl<'a> Protocol<'a> {
     while !BitPackedDecoder::done(&decoder.buffer) {
       let start_bits = BitPackedDecoder::used_bits(&decoder.buffer);
 
-      let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID);
+      let delta = decoder.instance(&self.typeinfos, &SVARUINT32_TYPEID, true);
 
-      let userid = decoder.instance(&self.typeinfos, &REPLAY_USERID_TYPEID);
+      let userid = decoder.instance(&self.typeinfos, &REPLAY_USERID_TYPEID, true);
 
-      let event_id = match decoder.instance(&self.typeinfos, &GAME_EVENTID_TYPEID) {
+      let event_id = match decoder.instance(&self.typeinfos, &GAME_EVENTID_TYPEID, true) {
         DecoderResult::Value(value) => value,
         _other => panic!("event_id is not a value: {:?}", _other),
       };
@@ -658,7 +670,7 @@ impl<'a> Protocol<'a> {
         None => panic!("CorruptedError: event_id({:?})", event_id),
       };
 
-      let event = match decoder.instance(&self.typeinfos, type_id) {
+      let event = match decoder.instance(&self.typeinfos, type_id, true) {
         DecoderResult::Struct(mut entries) => {
           entries.push(("_event".to_string(), DecoderResult::Name(typename.to_string())));
           Event::new(entries)

@@ -2,10 +2,7 @@ use crate::protocol::Int;
 use crate::protocol::ProtocolTypeInfo;
 use crate::protocol::Struct;
 
-use std::cmp::min;
 use std::str;
-
-use serde::Serialize;
 
 pub struct BitPackedBuffer {
   data: Vec<u8>,
@@ -112,9 +109,44 @@ impl BitPackedBuffer {
   }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum EventField {
+  Gameloop,
+  ControlPlayerId,
+  PlayerId,
+  UnitTypeName,
+  UnitTagIndex,
+  UnitTagRecycle,
+  Stats,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum StatsField {
+  WorkersActiveCount,
+  MineralsCollectionRate,
+  VespeneCollectionRate,
+  MineralsCurrent,
+  VespeneCurrent,
+  MineralsLostArmy,
+  MineralsLostEconomy,
+  MineralsLostTechnology,
+  VespeneLostArmy,
+  VespeneLostEconomy,
+  VespeneLostTechnology,
+  MineralsUsedInProgressArmy,
+  MineralsUsedCurrentArmy,
+  VespeneUsedInProgressArmy,
+  VespeneUsedCurrentArmy,
+}
+
+pub enum EventType {
+  ObjectEvent,
+  PlayerStatsEvent,
+}
+
 pub type EventEntry =  (String, DecoderResult);
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum DecoderResult {
   Name(String),
   Value(i64),
@@ -126,6 +158,7 @@ pub enum DecoderResult {
   Bool(bool),
   Struct(Vec<EventEntry>),
   Null,
+  Empty,
 }
 
 pub trait Decoder {
@@ -133,6 +166,7 @@ pub trait Decoder {
     &'a mut self,
     typeinfos: &[ProtocolTypeInfo],
     typeid: &u8,
+    event_allowed: bool,
   ) -> DecoderResult {
     let typeid_size = *typeid as usize;
     if typeid_size >= typeinfos.len() {
@@ -146,13 +180,13 @@ pub trait Decoder {
       ProtocolTypeInfo::Int(bounds) => self._int(bounds),
       ProtocolTypeInfo::Blob(bounds) => self._blob(bounds),
       ProtocolTypeInfo::Bool => self._bool(),
-      ProtocolTypeInfo::Array(bounds, typeid) => self._array(bounds, typeid),
+      ProtocolTypeInfo::Array(bounds, typeid) => self._array(bounds, typeid, event_allowed),
       ProtocolTypeInfo::Null => DecoderResult::Null,
       ProtocolTypeInfo::BitArray(bounds) => self._bitarray(bounds),
-      ProtocolTypeInfo::Optional(typeid) => self._optional(typeid),
+      ProtocolTypeInfo::Optional(typeid) => self._optional(typeid, event_allowed),
       ProtocolTypeInfo::FourCC => self._fourcc(),
-      ProtocolTypeInfo::Choice(bounds, fields) => self._choice(bounds, fields),
-      ProtocolTypeInfo::Struct(fields) => self._struct(fields),
+      ProtocolTypeInfo::Choice(bounds, fields) => self._choice(bounds, fields, event_allowed),
+      ProtocolTypeInfo::Struct(fields) => self._struct(fields, event_allowed),
     }
   }
 
@@ -175,11 +209,11 @@ pub trait Decoder {
 
   fn _bool(&mut self) -> DecoderResult;
 
-  fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult;
+  fn _array(&mut self, bounds: &Int, typeid: &u8, event_allowed: bool) -> DecoderResult;
 
   fn _bitarray(&mut self, bounds: &Int) -> DecoderResult;
 
-  fn _optional(&mut self, typeid: &u8) -> DecoderResult;
+  fn _optional(&mut self, typeid: &u8, event_allowed: bool) -> DecoderResult;
 
   fn _fourcc(&mut self) -> DecoderResult;
 
@@ -187,9 +221,10 @@ pub trait Decoder {
     &mut self,
     bounds: &Int,
     fields: &Vec<(i64, (&str, u8))>,
+    event_allowed: bool
   ) -> DecoderResult;
 
-  fn _struct<'a>(&'a mut self, fields: &[Struct]) -> DecoderResult;
+  fn _struct<'a>(&'a mut self, fields: &[Struct], event_allowed: bool) -> DecoderResult;
 }
 
 impl<'a> BitPackedDecoder<'a> {
@@ -227,12 +262,12 @@ impl Decoder for BitPackedDecoder<'_> {
     }
   }
 
-  fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult {
+  fn _array(&mut self, bounds: &Int, typeid: &u8, event_allowed: bool) -> DecoderResult {
     match self._int(bounds) {
       DecoderResult::Value(value) => {
         let mut array = Vec::with_capacity(value as usize);
         for _i in 0..value {
-          let data = match self.instance(self.typeinfos, typeid) {
+          let data = match self.instance(self.typeinfos, typeid, event_allowed) {
             DecoderResult::Value(value) => DecoderResult::DataFragment(value as u32),
             DecoderResult::Struct(values) => DecoderResult::Struct(values),
             _other => panic!("instance returned DecoderResult::{:?}", _other),
@@ -257,11 +292,11 @@ impl Decoder for BitPackedDecoder<'_> {
     }
   }
 
-  fn _optional(&mut self, typeid: &u8) -> DecoderResult {
+  fn _optional(&mut self, typeid: &u8, event_allowed: bool) -> DecoderResult {
     match self._bool() {
       DecoderResult::Bool(value) => {
         if value {
-          self.instance(self.typeinfos, typeid)
+          self.instance(self.typeinfos, typeid, event_allowed)
         } else {
           DecoderResult::Null
         }
@@ -277,7 +312,8 @@ impl Decoder for BitPackedDecoder<'_> {
   fn _choice(
     &mut self,
     bounds: &Int,
-    fields: &Vec<(i64, (&str, u8))>
+    fields: &Vec<(i64, (&str, u8))>,
+    event_allowed: bool,
   ) -> DecoderResult {
     let tag = match self._int(bounds) {
       DecoderResult::Value(value) => value,
@@ -286,18 +322,21 @@ impl Decoder for BitPackedDecoder<'_> {
 
     match fields.iter().find(|(field_tag, _)| *field_tag == tag) {
       Some((_, field)) => {
-        let choice_res = match self.instance(self.typeinfos, &field.1) {
+        let choice_res = match self.instance(self.typeinfos, &field.1, event_allowed) {
           DecoderResult::Value(value) => value,
           _other => panic!("didn't find DecoderResult::Value"),
         };
         // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-        DecoderResult::Gameloop((field.0.to_owned(), choice_res))
+        match event_allowed {
+          true => DecoderResult::Gameloop((field.0.to_owned(), choice_res)),
+          false => DecoderResult::Empty,
+        }
       },
       None => panic!("CorruptedError"),
     }
   }
 
-  fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {
+  fn _struct<'a>(&mut self, fields: &[Struct], event_allowed: bool) -> DecoderResult {
     let mut result = Vec::with_capacity(fields.len());
     for field in fields {
       // appears that this isn't needed since field is never parent
@@ -317,9 +356,11 @@ impl Decoder for BitPackedDecoder<'_> {
       // };
 
       // field always seems to exist?
-      let field_value = self.instance(self.typeinfos, &field.1);
-      // result.insert(field.0, field_value);
-      result.push((field.0.to_string(), field_value));
+      let field_value = self.instance(self.typeinfos, &field.1, event_allowed);
+      match event_allowed {
+        true => result.push((field.0.to_string(), field_value)),
+        false => continue,
+      }
     }
 
     DecoderResult::Struct(result)
@@ -432,13 +473,13 @@ impl Decoder for VersionedDecoder<'_> {
     DecoderResult::Bool(self.buffer.read_bits(8) != 0)
   }
 
-  fn _array(&mut self, bounds: &Int, typeid: &u8) -> DecoderResult {
+  fn _array(&mut self, bounds: &Int, typeid: &u8, event_allowed: bool) -> DecoderResult {
     self.expect_skip(0);
     let length = self._vint();
 
     let mut array = Vec::with_capacity(length as usize);
     for _ in 0..length {
-      let data = match self.instance(self.typeinfos, typeid) {
+      let data = match self.instance(self.typeinfos, typeid, event_allowed) {
         DecoderResult::Value(value) => DecoderResult::DataFragment(value as u32),
         DecoderResult::Struct(values) => DecoderResult::Struct(values),
         DecoderResult::Blob(value) => DecoderResult::Blob(value),
@@ -462,10 +503,10 @@ impl Decoder for VersionedDecoder<'_> {
     DecoderResult::Pair((0, 0))
   }
 
-  fn _optional(&mut self, typeid: &u8) -> DecoderResult {
+  fn _optional(&mut self, typeid: &u8, event_allowed: bool) -> DecoderResult {
     self.expect_skip(4);
     if self.buffer.read_bits(8) != 0 {
-      self.instance(self.typeinfos, typeid)
+      self.instance(self.typeinfos, typeid, event_allowed)
     } else {
       DecoderResult::Null
     }
@@ -483,20 +524,23 @@ impl Decoder for VersionedDecoder<'_> {
   fn _choice(
     &mut self,
     bounds: &Int,
-    // fields: &HashMap<i64, (&str, u8)>,
     fields: &Vec<(i64, (&str, u8))>,
+    event_allowed: bool
   ) -> DecoderResult {
     self.expect_skip(3);
     let tag = self._vint();
 
     match fields.iter().find(|(field_tag, _)| *field_tag == tag) {
       Some((_, field)) => {
-        let choice_res = match self.instance(self.typeinfos, &field.1) {
+        let choice_res = match self.instance(self.typeinfos, &field.1, event_allowed) {
           DecoderResult::Value(value) => value,
           _other => panic!("didn't find DecoderResult::Value"),
         };
         // println!("_choice instance returned {:?} {:?}", field.0, choice_res);
-        DecoderResult::Gameloop((field.0.to_owned(), choice_res))
+        match event_allowed {
+          true => DecoderResult::Gameloop((field.0.to_owned(), choice_res)),
+          false => DecoderResult::Empty,
+        }
       },
       None => {
         self._skip_instance();
@@ -505,9 +549,8 @@ impl Decoder for VersionedDecoder<'_> {
     }
   }
 
-  fn _struct<'a>(&mut self, fields: &[Struct]) -> DecoderResult {
+  fn _struct<'a>(&mut self, fields: &[Struct], event_allowed: bool) -> DecoderResult {
     self.expect_skip(5);
-    // let mut result = HashMap::<&str, DecoderResult>::new();
     let mut result = Vec::with_capacity(fields.len());
     let length = self._vint();
     for _ in 0..length {
@@ -531,9 +574,11 @@ impl Decoder for VersionedDecoder<'_> {
 
       // field always seems to exist?
       let field = fields.iter().find(|f| f.2 as i64 == tag).unwrap();
-      let field_value = self.instance(self.typeinfos, &field.1);
-      // result.insert(field.0, field_value);
-      result.push((field.0.to_string(), field_value))
+      let field_value = self.instance(self.typeinfos, &field.1, event_allowed);
+      match event_allowed {
+        true => result.push((field.0.to_string(), field_value)),
+        false => continue,
+      }
     }
 
     DecoderResult::Struct(result)
