@@ -8,7 +8,6 @@ use crate::events::player_stats_event::PlayerStatsEvent;
 use crate::events::object_event::ObjectEvent;
 
 use std::collections::HashMap;
-use std::time::Instant;
 
 pub type RaceMappings<'a> = HashMap<&'a str, &'a str>;
 
@@ -353,7 +352,7 @@ impl<'a> ReplayParser<'a> {
       game_length,
       played_at,
       event: replay.tags.clone(),
-      game_version: parsed_metadata.GameVersion.to_string(),
+      // game_version: parsed_metadata.GameVersion.to_string(),
     };
 
     let replay_summary: ReplaySummary = ReplaySummary {

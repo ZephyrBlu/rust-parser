@@ -60,7 +60,7 @@ pub struct TinybirdGame {
   game_length: u16,
   played_at: u64,
   event: String,
-  game_version: String,
+  // game_version: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize)]
@@ -143,9 +143,9 @@ fn main() {
   }
 
   for replay_summary in result.replays {
-    // if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
-    //   tinybird_serialized.push(replay_summary.tinybird.clone());
-    // }
+    if &replay_summary.tinybird.winner_build != "" && &replay_summary.tinybird.loser_build != "" {
+      tinybird_serialized.push(replay_summary.tinybird.clone());
+    }
     // tinybird_timelines.extend(replay_summary.timeline.clone());
 
     let mut races = vec![];
@@ -212,11 +212,6 @@ fn main() {
 
   build_tokens.generate_matchup_build_trees();
   // build_tokens.generate_matchup_unit_trees();
-
-  // for (name, tree) in &build_tokens.raw_build_tree {
-  //   let total_insertion_time: u128 = tree.insert_time.iter().sum();
-  //   println!("total insertion time for {:?}: {:?} nanoseconds", name, total_insertion_time);
-  // }
 
   println!("{:?} replays parsed in {:.2?}, {:?} per replay", num_replays, now.elapsed(), now.elapsed() / num_replays as u32);
 
