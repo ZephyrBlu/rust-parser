@@ -107,13 +107,13 @@ impl Node {
     let new_node_label = &self.label[idx + 1..];
 
     let mut new_node = Node::new(
-      new_node_label.to_string(),
+      new_node_label.to_owned(),
       self.value.clone(),
     );
     swap(&mut new_node.children, &mut self.children);
 
     self.children.push(new_node);
-    self.label = current_node_label.to_string();
+    self.label = current_node_label.to_owned();
   }
 
   // refactor this to use matches instead of only if statements
@@ -152,8 +152,6 @@ impl Node {
 
       if child.label.starts_with(compare_fragment) {
         child.split_at(compare_fragment.len());
-
-        child.value = count.clone();
         child.value.add(&count);
         self.value.add(&count);
 
@@ -214,6 +212,8 @@ impl RadixTrie {
     tree
   }
 
+  // subtree totals may not add up because builds will end at nodes
+  // this doesn't contribute to children totals, and since nodes don't have self-values it's opaque
   pub fn insert(&mut self, build: &str, count: BuildCount) {
     self.root.walk(build, &count);
   }
