@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::mem::swap;
-use std::time::Instant;
 
 use serde::Serialize;
 
@@ -66,6 +65,7 @@ pub struct Node {
   pub label: String,
   pub children: Vec<Node>,
   pub value: BuildCount,
+  pub tags: String,
 }
 
 impl Node {
@@ -74,6 +74,7 @@ impl Node {
       label,
       children: vec![],
       value,
+      tags: String::new(),
     }
   }
 
