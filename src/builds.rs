@@ -67,7 +67,7 @@ impl Builds {
   pub fn generate_tokens(&mut self, build: &Vec<String>, win: bool, token_prefix: String) {
     let filtered_build: Vec<String> = build
       .iter()
-      .filter(|building| !FILTER_BUILDINGS.contains(&building.as_str()))
+      // .filter(|building| !FILTER_BUILDINGS.contains(&building.as_str()))
       .map(|building| building.clone())
       .collect();
 
